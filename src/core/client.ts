@@ -1,22 +1,22 @@
 import { VideonestConfig, VideoMetadata, UploadOptions, UploadResult, AuthResponse, VideoStatus } from '../types';
-
-// Conditionally import fluent-ffmpeg for Node environments
-let ffmpeg: any;
-if (typeof window === 'undefined') {
-  // This will only execute in Node.js environments
-  ffmpeg = require('fluent-ffmpeg');
-}
+import { log, forceLog } from '../utils/debug';
 
 export default class VideonestClient {
   private config: VideonestConfig;
   private authenticated: boolean = false;
+  private channelId: number = 0;
 
   constructor(config: VideonestConfig) {
     this.config = config;
   }
 
   async authenticate(): Promise<AuthResponse> {
+    forceLog('Authenticating with Videonest API...');
+    forceLog('Configuration:', { channelId: this.config.channelId, apiKeyProvided: !!this.config.apiKey });
+    
     try {
+      forceLog('Making authentication request to https://api1.videonest.co/sdk/authenticate');
+      forceLog('Authentication request data:', { channelId: this.config.channelId, apiKey: this.config.apiKey });
       const response = await fetch('https://api1.videonest.co/sdk/authenticate', {
         method: 'POST',
         headers: {
@@ -28,9 +28,12 @@ export default class VideonestClient {
         }),
       });
       
+      forceLog(`Authentication response status: ${response.status}`);
       const data = await response.json();
+      forceLog('Authentication response data:', data);
       
       if (!data.success) {
+        forceLog(`Authentication failed: ${data.message || 'Unknown error'}`);
         this.authenticated = false;
         return {
           success: false,
@@ -38,12 +41,15 @@ export default class VideonestClient {
         };
       }
       
+      forceLog('Authentication successful');
       this.authenticated = true;
+      this.channelId = this.config.channelId;
       return {
         success: true,
         message: 'Authentication successful'
       };
     } catch (error) {
+      log(`Authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
       this.authenticated = false;
       return {
         success: false,
@@ -53,6 +59,8 @@ export default class VideonestClient {
   }
   
   async uploadVideo(file: File, options: UploadOptions): Promise<UploadResult> {
+    forceLog('Starting video upload process');
+    forceLog(`File: ${file.name}, size: ${file.size} bytes`);
     this.checkAuthentication();
     
     try {
@@ -60,19 +68,32 @@ export default class VideonestClient {
         metadata, 
         chunkSize = 2 * 1024 * 1024, 
         onProgress = () => {}, 
-        thumbnail,
-        autoGenerateThumbnail = false
+        thumbnail
       } = options;
+      
+      // Check if thumbnail is provided
+      if (!thumbnail) {
+        forceLog('Error: Thumbnail is required');
+        throw new Error('Thumbnail is required for video upload');
+      }
+      
+      forceLog('Upload options:', { 
+        metadata, 
+        chunkSize, 
+        hasThumbnail: !!thumbnail
+      });
       
       // Generate UUID for this upload
       const uploadId = this.generateUUID();
       const totalChunks = Math.ceil(file.size / chunkSize);
+      forceLog(`Generated uploadId: ${uploadId}, total chunks: ${totalChunks}`);
       
       // Make sure channelId is included in metadata
       const uploadMetadata = {
         ...metadata,
         channelId: metadata.channelId || this.config.channelId,
       };
+      forceLog('Upload metadata:', uploadMetadata);
       
       // Upload file in chunks
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
@@ -87,7 +108,8 @@ export default class VideonestClient {
         formData.append('totalChunks', totalChunks.toString());
         formData.append('fileName', file.name);
         formData.append('fileSize', file.size.toString());
-        
+
+        // Lets log ever
         // Add metadata to the first chunk
         if (chunkIndex === 0 && uploadMetadata) {
           formData.append('channelId', uploadMetadata.channelId.toString());
@@ -107,7 +129,8 @@ export default class VideonestClient {
         }
         
         // Send the chunk
-        const response = await fetch('https://api1.videonest.co/upload/videos/upload-chunk', {
+        forceLog(`Uploading chunk ${chunkIndex + 1}/${totalChunks} (${start}-${end} bytes)`);
+        const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/upload-chunk`, {
           method: 'POST',
           body: formData,
           headers: {
@@ -115,24 +138,31 @@ export default class VideonestClient {
           },
         });
         
+        forceLog(`Chunk ${chunkIndex + 1} response status: ${response.status}`);
         const result = await response.json();
+        forceLog(`Chunk ${chunkIndex + 1} upload result:`, result);
+        
         if (!result.success) {
+          forceLog(`Chunk ${chunkIndex + 1} upload failed: ${result.message}`);
           throw new Error(result.message || 'Chunk upload failed');
         }
         
         // Update progress
         const progress = ((chunkIndex + 1) / totalChunks) * 100;
+        forceLog(`Upload progress: ${progress.toFixed(2)}%`);
         onProgress(progress);
       }
       
       // Finalize the upload
+      forceLog('All chunks uploaded. Finalizing upload...');
       const finalData = { 
         fileName: file.name, 
         uploadId: uploadId,
         totalChunks: totalChunks.toString() 
       };
+      forceLog('Finalize request data:', finalData);
       
-      const finalizeResponse = await fetch('https://api1.videonest.co/videos/finalize', {
+      const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/finalize`, {
         method: 'POST',
         body: JSON.stringify(finalData),
         headers: {
@@ -141,28 +171,24 @@ export default class VideonestClient {
         },
       });
       
+      forceLog(`Finalize response status: ${finalizeResponse.status}`);
       const finalizeResult = await finalizeResponse.json();
+      forceLog('Finalize response data:', finalizeResult);
+      
       if (!finalizeResult.success) {
+        forceLog(`Finalization failed: ${finalizeResult.message}`);
         throw new Error(finalizeResult.message || 'Upload finalization failed');
       }
       
-      // Handle thumbnail
-      if (thumbnail) {
-        // User provided a thumbnail, upload it directly
-        await this.uploadThumbnail(uploadMetadata.channelId, thumbnail, finalizeResult.video.id);
-      } else if (autoGenerateThumbnail) {
-        // User wants an auto-generated thumbnail
-        try {
-          const generatedThumbnail = await this.createThumbnailFromVideo(file);
-          await this.uploadThumbnail(uploadMetadata.channelId, generatedThumbnail, finalizeResult.video.id);
-        } catch (thumbnailError) {
-          console.warn('Failed to generate thumbnail:', thumbnailError);
-          // Continue without thumbnail rather than failing the whole upload
-        }
-      }
+      forceLog('Upload successfully finalized');
       
+      // Upload the provided thumbnail
+      forceLog('Uploading user-provided thumbnail');
+      await this.uploadThumbnail(thumbnail, finalizeResult.video.id);
+      forceLog('Upload process completed successfully');
       return finalizeResult;
     } catch (error) {
+      forceLog(`Upload error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
       return { 
         success: false, 
         message: error instanceof Error ? error.message : 'An unexpected error occurred during upload' 
@@ -171,20 +197,23 @@ export default class VideonestClient {
   }
 
   private checkAuthentication(): void {
+    forceLog(`Authentication check. Current status: ${this.authenticated ? 'authenticated' : 'not authenticated'}`);
     if (!this.authenticated) {
+      forceLog('Authentication check failed. Throwing error.');
       throw new Error('Not authenticated. Call authenticate() first.');
     }
+    forceLog('Authentication check passed');
   }
   
   
-  private async uploadThumbnail(channelId: string, thumbnailFile: File, videoId: string): Promise<any> {
+  private async uploadThumbnail(thumbnailFile: File, videoId: string): Promise<any> {
     this.checkAuthentication();
     
     const formData = new FormData();
     formData.append('thumbnail', thumbnailFile);
 
     try {
-      const response = await fetch(`https://api1.videonest.co/download/videos/${videoId}/send-thumbnail`, {
+      const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos/${videoId}/send-thumbnail`, {
         method: 'POST',
         body: formData,
         headers: {
@@ -212,153 +241,11 @@ export default class VideonestClient {
     });
   }
 
- 
-  private async createThumbnailFromVideo(videoFile: File): Promise<File> {
-    // Check if we're in a browser environment
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      // Browser method using video and canvas
-      return this.createThumbnailInBrowser(videoFile);
-    } else {
-      // Node.js method using fluent-ffmpeg
-      return this.createThumbnailInNode(videoFile);
-    }
-  }
-
- 
-  private async createThumbnailInBrowser(videoFile: File): Promise<File> {
-    return new Promise((resolve, reject) => {
-      // Create video element
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.muted = true;
-      video.playsInline = true;
-      
-      // Create object URL from the video file
-      const videoUrl = URL.createObjectURL(videoFile);
-      video.src = videoUrl;
-      
-      // Set up event handlers
-      video.onloadedmetadata = () => {
-        // Seek to the 2 second mark (or video duration if less than 2 seconds)
-        video.currentTime = Math.min(2, video.duration);
-      };
-      
-      video.onseeked = () => {
-        try {
-          // Create canvas with video dimensions
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          if (!ctx) {
-            reject(new Error('Failed to get canvas context'));
-            return;
-          }
-          
-          // Set canvas dimensions to match video
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          
-          // Draw the current frame to the canvas
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
-          // Convert canvas to blob
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              reject(new Error('Failed to create thumbnail blob'));
-              return;
-            }
-            
-            // Clean up
-            URL.revokeObjectURL(videoUrl);
-            
-            // Create a File from the Blob
-            const thumbnailFile = new File(
-              [blob], 
-              `${videoFile.name.split('.')[0]}_thumbnail.jpg`, 
-              { type: 'image/jpeg' }
-            );
-            
-            resolve(thumbnailFile);
-          }, 'image/jpeg', 0.95);
-        } catch (error) {
-          reject(error);
-        }
-      };
-      
-      video.onerror = () => {
-        URL.revokeObjectURL(videoUrl);
-        reject(new Error('Error loading video for thumbnail generation'));
-      };
-      
-      // Start loading
-      video.load();
-    });
-  }
-
- 
-  private async createThumbnailInNode(videoFile: File): Promise<File> {
-    return new Promise((resolve, reject) => {
-      if (!ffmpeg) {
-        reject(new Error('fluent-ffmpeg is required for Node.js thumbnail generation. Install it with: npm install fluent-ffmpeg'));
-        return;
-      }
-
-      // Create a temporary file path
-      const os = require('os');
-      const path = require('path');
-      const fs = require('fs');
-      
-      const tempDir = os.tmpdir();
-      const inputPath = path.join(tempDir, videoFile.name);
-      const outputPath = path.join(tempDir, `${path.parse(videoFile.name).name}_thumbnail.jpg`);
-      
-      // Write the file to disk
-      fs.writeFileSync(inputPath, Buffer.from(videoFile as any));
-      
-      // Use ffmpeg to extract the frame at 2 seconds
-      ffmpeg(inputPath)
-        .screenshots({
-          timestamps: [2],
-          filename: path.basename(outputPath),
-          folder: path.dirname(outputPath),
-          size: '?x?'  // Keep original dimensions
-        })
-        .on('end', () => {
-          try {
-            // Read the thumbnail file
-            const thumbnailBuffer = fs.readFileSync(outputPath);
-            
-            // Create a File object from the buffer
-            const thumbnailFile = new File(
-              [thumbnailBuffer], 
-              path.basename(outputPath), 
-              { type: 'image/jpeg' }
-            );
-            
-            // Clean up temp files
-            fs.unlinkSync(inputPath);
-            fs.unlinkSync(outputPath);
-            
-            resolve(thumbnailFile);
-          } catch (error) {
-            reject(error);
-          }
-        })
-        .on('error', (err: Error) => {
-          // Clean up temp file
-          if (fs.existsSync(inputPath)) {
-            fs.unlinkSync(inputPath);
-          }
-          reject(err);
-        });
-    });
-  }
-
  async getVideoStatus(videoId: number): Promise<VideoStatus> {
     this.checkAuthentication();
     
     try {
-      const response = await fetch(`https://api1.videonest.co/videos/${videoId}/status`, {
+      const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos/${videoId}/status`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.config.apiKey}`,

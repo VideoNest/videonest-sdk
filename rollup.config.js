@@ -19,7 +19,8 @@ export default [
       commonjs(),
       typescript({ tsconfig: './tsconfig.json' }),
       terser()
-    ]
+    ],
+    external: ['debug']
   },
   // CommonJS and ES Module builds (for Node.js and modern bundlers)
   {

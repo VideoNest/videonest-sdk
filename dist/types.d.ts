@@ -1,5 +1,5 @@
 export interface VideonestConfig {
-    channelId: string;
+    channelId: number;
     apiKey: string;
 }
 export interface AuthResponse {
@@ -10,7 +10,7 @@ export interface VideoMetadata {
     title: string;
     description?: string;
     tags?: string[] | string;
-    channelId?: string;
+    channelId?: number;
 }
 export interface UploadOptions {
     chunkSize?: number;

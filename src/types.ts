@@ -1,7 +1,7 @@
 // Core types for the Videonest SDK
 
 export interface VideonestConfig {
-    channelId: string;
+    channelId: number;
     apiKey: string;
   }
   
@@ -14,7 +14,7 @@ export interface VideonestConfig {
     title: string;
     description?: string;
     tags?: string[] | string;
-    channelId?: string;
+    channelId?: number;
   }
   
   export interface UploadOptions {
