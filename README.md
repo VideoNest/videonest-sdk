@@ -1,5 +1,7 @@
 # VideoNest SDK
 
+> **IMPORTANT**: This package is intended for enterprise VideoNest clients only and will not be usable without an authorized API key.
+
 Official SDK for uploading, managing, and embedding videos with the VideoNest platform. This SDK provides a seamless interface for integrating VideoNest's video hosting and streaming capabilities into your applications.
 
 ## Table of Contents
@@ -13,6 +15,7 @@ Official SDK for uploading, managing, and embedding videos with the VideoNest pl
   - [Get Video Status](#get-video-status)
   - [List Videos](#list-videos)
 - [Video Embedding](#video-embedding)
+- [Webhooks](#webhooks)
 - [Types](#types)
 
 ## Installation
@@ -190,4 +193,46 @@ For detailed type definitions, you can import them directly:
 
 ```typescript
 import { VideoMetadata, UploadOptions } from 'videonest-sdk';
+```
+
+## Webhooks
+
+VideoNest provides webhook notifications for video processing events. You can configure webhook URLs directly in your VideoNest admin dashboard to receive POST requests when your videos complete processing.
+
+### Webhook Payload
+
+When a video's processing status changes, VideoNest will send a POST request to your configured webhook URL with the following JSON payload:
+
+```json
+{
+  "id": 12345,    // Integer video ID
+  "status": "success"  // Either "success" or "failure"
+}
+```
+
+### Implementing a Webhook Receiver
+
+You'll need to set up an endpoint on your server to receive these webhook notifications. Here's a simple example using Express.js:
+
+```javascript
+const express = require('express');
+const app = express();
+
+app.use(express.json());
+
+app.post('/videonest-webhook', (req, res) => {
+  const { id, status } = req.body;
+  
+  console.log(`Video ${id} processing ${status === 'success' ? 'completed successfully' : 'failed'}`);
+  
+  // Update your application's state based on the video status
+  // ...
+  
+  // Acknowledge receipt of the webhook
+  res.status(200).send('Webhook received');
+});
+
+app.listen(3000, () => {
+  console.log('Webhook receiver listening on port 3000');
+});
 ```
