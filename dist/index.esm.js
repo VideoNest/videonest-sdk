@@ -280,7 +280,7 @@ class VideonestClient {
         this.checkAuthentication();
         log('Fetching videos for channel ID:', this.channelId);
         try {
-            const response = await fetch(`https://api1.videonest.co/${this.channelId.toString()}/videos`, {
+            const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,

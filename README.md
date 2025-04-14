@@ -7,6 +7,7 @@ Official SDK for uploading, managing, and embedding videos with the VideoNest pl
 ## Table of Contents
 
 - [Installation](#installation)
+- [Example Project](#example-project)
 - [Authentication](#authentication)
 - [Debug Mode](#debug-mode)
 - [SDK Functions](#sdk-functions)
@@ -32,6 +33,13 @@ Or using yarn:
 yarn add videonest-sdk
 ```
 
+## Example Project
+
+A complete example implementation of the VideoNest SDK is available at:
+
+[https://github.com/lukechar05/sdk-example](https://github.com/lukechar05/sdk-example)
+
+This repository demonstrates how to properly integrate and use all features of the VideoNest SDK in a real-world application, including authentication, video uploads, embedding, and webhook processing.
 
 ## Debug Mode
 
@@ -138,7 +146,7 @@ None - Uses the authenticated channel ID
     title: string;
     description: string;
     tags: string;
-    published_at: string;
+    published_at: Date; // Prisma DateTime, ISO format string
     orientation: string;
     thumbnail: string;
   }[];
