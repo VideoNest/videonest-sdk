@@ -10,4 +10,9 @@ export default class VideonestClient {
     private uploadThumbnail;
     private generateUUID;
     getVideoStatus(videoId: number): Promise<VideoStatus>;
+    listVideos(): Promise<{
+        success: boolean;
+        videos?: any[];
+        message?: string;
+    }>;
 }

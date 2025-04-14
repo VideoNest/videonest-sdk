@@ -8,3 +8,8 @@ export declare function authVideonest(channelId: number, apiKey: string): Promis
 export declare function getClient(): VideonestClient;
 export declare function uploadVideo(file: File, options: any): Promise<import("./types").UploadResult>;
 export declare function getVideoStatus(videoId: number): Promise<import("./types").VideoStatus>;
+export declare function listVideos(): Promise<{
+    success: boolean;
+    videos?: any[];
+    message?: string;
+}>;
