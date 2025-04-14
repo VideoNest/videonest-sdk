@@ -21,12 +21,8 @@
     "sdk",
     "videonest"
   ],
-  "author": "Your Name",
+  "author": "VideoNest",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/videonest-sdk.git"
-  },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-node-resolve": "^16.0.1",
