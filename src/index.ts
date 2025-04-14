@@ -43,3 +43,7 @@ export async function getVideoStatus(videoId: number) {
     return getClient().getVideoStatus(videoId);
   }
 
+export async function listVideos() {
+  return getClient().listVideos();
+}
+

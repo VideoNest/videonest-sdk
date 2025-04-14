@@ -262,4 +262,39 @@ export default class VideonestClient {
       throw new Error(error instanceof Error ? error.message : 'Failed to get video status');
     }
   }
+
+  async listVideos(): Promise<{ success: boolean, videos?: any[], message?: string }> {
+    this.checkAuthentication();
+    log('Fetching videos for channel ID:', this.channelId);
+    
+    try {
+      const response = await fetch(`https://api1.videonest.co/${this.channelId.toString()}/videos`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+        },
+      });
+      
+      log(`Videos list response status: ${response.status}`);
+      const result = await response.json();
+      log('Videos list response data:', result);
+      
+      if (!result.success) {
+        log(`Videos list fetch failed: ${result.message || 'Unknown error'}`);
+        return {
+          success: false,
+          message: result.message || 'Failed to retrieve videos'
+        };
+      }
+      
+      log(`Successfully retrieved ${result.videos ? result.videos.length : 0} videos`);
+      return result;
+    } catch (error) {
+      log(`Videos list error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to retrieve videos'
+      };
+    }
+  }
 }
