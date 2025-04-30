@@ -2141,40 +2141,54 @@ var reactExports = requireReact();
 var React = /*@__PURE__*/getDefaultExportFromCjs(reactExports);
 
 const VideonestEmbed = ({ videoId, style = {} }) => {
-    // Instead of using useState and useEffect, let's simplify the component
-    // and handle SDK initialization in a different way
     // Default styles
     const defaultWidth = '100%';
     const defaultHeight = '400px';
     // Build URL with style parameters if provided
     let embedUrl = `https://app.videonest.co/newEmbed/single/${videoId}`;
-    const searchParams = new URLSearchParams();
+    const params = [];
     if (style.primaryColor) {
-        searchParams.append('primaryColor', style.primaryColor.replace('#', ''));
+        params.push(`primaryColor=${style.primaryColor.replace('#', '')}`);
     }
-    if (style.darkMode) {
-        searchParams.append('darkMode', style.darkMode.toString());
+    // Explicitly check for boolean values
+    if (style.darkMode === true) {
+        params.push('darkMode=true');
     }
-    if (style.hideVideoDetails) {
-        searchParams.append('hideVideoDetails', style.hideVideoDetails.toString());
+    else if (style.darkMode === false) {
+        params.push('darkMode=false');
+    }
+    if (style.hideVideoDetails === true) {
+        params.push('hideVideoDetails=true');
+    }
+    else if (style.hideVideoDetails === false) {
+        params.push('hideVideoDetails=false');
     }
     // Add search params to URL if any were set
-    if (searchParams.toString()) {
-        embedUrl += `?${searchParams.toString()}`;
+    if (params.length > 0) {
+        embedUrl += `?${params.join('&')}`;
     }
-    // We'll check if SDK is initialized only when needed
-    let isSDKInitialized = false;
+    // Check SDK initialization outside of render phase
+    let sdkInitialized = true;
     try {
         getClient();
-        isSDKInitialized = true;
     }
-    catch (error) {
-        console.error('Videonest SDK not initialized:', error);
+    catch (e) {
+        sdkInitialized = false;
     }
-    if (!isSDKInitialized) {
-        return React.createElement("div", null, "Please initialize Videonest SDK first using authVideonest()");
+    // Avoid JSX in conditional rendering to prevent issues in React 18.3.1
+    if (!sdkInitialized) {
+        return React.createElement('div', null, 'Please initialize Videonest SDK first using authVideonest()');
     }
-    return (React.createElement("iframe", { src: embedUrl, width: style.width || defaultWidth, height: style.height || defaultHeight, frameBorder: "0", allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture", allowFullScreen: true, title: `Videonest video ${videoId}` }));
+    // Use React.createElement instead of JSX for the iframe to avoid potential issues
+    return React.createElement('iframe', {
+        src: embedUrl,
+        width: style.width || defaultWidth,
+        height: style.height || defaultHeight,
+        frameBorder: '0',
+        allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+        allowFullScreen: true,
+        title: `Videonest video ${videoId}`
+    });
 };
 
 // Global client instance
