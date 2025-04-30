@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
 import { getClient } from '../index';
 import { log, forceLog } from '../utils/debug';
 
@@ -19,12 +19,12 @@ const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) 
   const defaultHeight = '400px';
   
   // Use state to track initialization
-  const [sdkInitialized, setSdkInitialized] = useState(false);
+  const [sdkInitialized, setSdkInitialized] = React.useState(false);
   
   log('VideonestEmbed props:', { videoId, style });
   
   // Check SDK initialization in an effect hook
-  useEffect(() => {
+  React.useEffect(() => {
     try {
       getClient();
       setSdkInitialized(true);
@@ -64,21 +64,19 @@ const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) 
   
   // Render loading or error state when SDK is not initialized
   if (!sdkInitialized) {
-    return <div>Please initialize Videonest SDK first using authVideonest()</div>;
+    return React.createElement('div', null, 'Please initialize Videonest SDK first using authVideonest()');
   }
   
-  // Use standard JSX for the iframe now that we're using proper React patterns
-  return (
-    <iframe
-      src={embedUrl}
-      width={style.width || defaultWidth}
-      height={style.height || defaultHeight}
-      frameBorder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowFullScreen
-      title={`Videonest video ${videoId}`}
-    />
-  );
+  // Use React.createElement for the iframe for maximum compatibility
+  return React.createElement('iframe', {
+    src: embedUrl,
+    width: style.width || defaultWidth,
+    height: style.height || defaultHeight,
+    frameBorder: '0',
+    allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+    allowFullScreen: true,
+    title: `Videonest video ${videoId}`
+  });
 };
 
 export default VideonestEmbed;

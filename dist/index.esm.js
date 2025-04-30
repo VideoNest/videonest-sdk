@@ -2144,7 +2144,20 @@ const VideonestEmbed = ({ videoId, style = {} }) => {
     // Default styles
     const defaultWidth = '100%';
     const defaultHeight = '400px';
+    // Use state to track initialization
+    const [sdkInitialized, setSdkInitialized] = reactExports.useState(false);
     log('VideonestEmbed props:', { videoId, style });
+    // Check SDK initialization in an effect hook
+    reactExports.useEffect(() => {
+        try {
+            getClient();
+            setSdkInitialized(true);
+        }
+        catch (e) {
+            setSdkInitialized(false);
+        }
+        log('VideonestEmbed SDK initialized:', sdkInitialized);
+    }, []); // Empty dependency array means this runs once on mount
     // Build URL with style parameters if provided
     let embedUrl = `https://app.videonest.co/newEmbed/single/${videoId}`;
     const params = [];
@@ -2168,30 +2181,13 @@ const VideonestEmbed = ({ videoId, style = {} }) => {
     if (params.length > 0) {
         embedUrl += `?${params.join('&')}`;
     }
-    // Check SDK initialization outside of render phase
-    let sdkInitialized = true;
-    try {
-        getClient();
-    }
-    catch (e) {
-        sdkInitialized = false;
-    }
-    log('VideonestEmbed SDK initialized:', sdkInitialized);
-    // Avoid JSX in conditional rendering to prevent issues in React 18.3.1
+    log("Creating React element with SDK initialized:", sdkInitialized);
+    // Render loading or error state when SDK is not initialized
     if (!sdkInitialized) {
-        return React.createElement('div', null, 'Please initialize Videonest SDK first using authVideonest()');
+        return React.createElement("div", null, "Please initialize Videonest SDK first using authVideonest()");
     }
-    log("client initialized creating react element ");
-    // Use React.createElement instead of JSX for the iframe to avoid potential issues
-    return React.createElement('iframe', {
-        src: embedUrl,
-        width: style.width || defaultWidth,
-        height: style.height || defaultHeight,
-        frameBorder: '0',
-        allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
-        allowFullScreen: true,
-        title: `Videonest video ${videoId}`
-    });
+    // Use standard JSX for the iframe now that we're using proper React patterns
+    return (React.createElement("iframe", { src: embedUrl, width: style.width || defaultWidth, height: style.height || defaultHeight, frameBorder: "0", allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture", allowFullScreen: true, title: `Videonest video ${videoId}` }));
 };
 
 // Global client instance
