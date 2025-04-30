@@ -20,7 +20,7 @@ export default [
       typescript({ tsconfig: './tsconfig.json' }),
       terser()
     ],
-    external: ['debug']
+    external: ['debug', 'react', 'react-dom']
   },
   // CommonJS and ES Module builds (for Node.js and modern bundlers)
   {
