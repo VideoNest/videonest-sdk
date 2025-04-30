@@ -1,5 +1,7 @@
 import React from 'react';
 import { getClient } from '../index';
+import { log, forceLog } from '../utils/debug';
+
 
 interface VideonestEmbedProps {
   videoId: number;
@@ -16,6 +18,7 @@ const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) 
   // Default styles
   const defaultWidth = '100%';
   const defaultHeight = '400px';
+  log('VideonestEmbed props:', { videoId, style });
   
   // Build URL with style parameters if provided
   let embedUrl = `https://app.videonest.co/newEmbed/single/${videoId}`;
@@ -50,12 +53,13 @@ const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) 
   } catch (e) {
     sdkInitialized = false;
   }
+  log('VideonestEmbed SDK initialized:', sdkInitialized);
   
   // Avoid JSX in conditional rendering to prevent issues in React 18.3.1
   if (!sdkInitialized) {
     return React.createElement('div', null, 'Please initialize Videonest SDK first using authVideonest()');
   }
-  
+  log("client initialized creating react element ")
   // Use React.createElement instead of JSX for the iframe to avoid potential issues
   return React.createElement('iframe', {
     src: embedUrl,
