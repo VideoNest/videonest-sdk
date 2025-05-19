@@ -10,6 +10,9 @@ interface VideonestEmbedProps {
     darkMode?: boolean;
     showVideoDetails?: boolean;
     width?: string | number;
+    height?: string | number;
+    showTitle?: boolean;
+    showDescription?: boolean;
   };
 }
 
@@ -20,7 +23,7 @@ const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) 
   
   // Use state to track initialization
   const [sdkInitialized, setSdkInitialized] = React.useState(false);
-  const {primaryColor, secondaryColor, darkMode, showVideoDetails, width} = style;
+  const {primaryColor, secondaryColor, darkMode, showVideoDetails, width, height, showTitle, showDescription} = style;
   
   // Check SDK initialization in an effect hook
   React.useEffect(() => {
@@ -41,6 +44,9 @@ const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) 
   if (darkMode) params.push('dark_mode=true');
   if (showVideoDetails) params.push('show_video_details=true');
   if (width) params.push(`width=${width}`);
+  if (height) params.push(`height=${height}`);
+  if (showTitle) params.push('show_title=true');
+  if (showDescription) params.push('show_description=true');
   
   // Add search params to URL if any were set
   if (params.length > 0) {
