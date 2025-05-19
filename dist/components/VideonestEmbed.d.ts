@@ -7,6 +7,9 @@ interface VideonestEmbedProps {
         darkMode?: boolean;
         showVideoDetails?: boolean;
         width?: string | number;
+        height?: string | number;
+        showTitle?: boolean;
+        showDescription?: boolean;
     };
 }
 declare const VideonestEmbed: React.FC<VideonestEmbedProps>;

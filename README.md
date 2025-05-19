@@ -37,7 +37,7 @@ yarn add videonest-sdk
 
 A complete example implementation of the VideoNest SDK is available at:
 
-[https://github.com/lukechar05/sdk-example](https://github.com/lukechar05/sdk-example)
+[https://github.com/VideoNest/videonest-sdk](https://github.com/VideoNest/videonest-sdk)
 
 This repository demonstrates how to properly integrate and use all features of the VideoNest SDK in a real-world application, including authentication, video uploads, embedding, and webhook processing.
 

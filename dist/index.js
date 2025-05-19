@@ -342,7 +342,7 @@ const VideonestEmbed = ({ videoId, style = {} }) => {
     const defaultWidth = '100%';
     // Use state to track initialization
     const [sdkInitialized, setSdkInitialized] = React__namespace.useState(false);
-    const { primaryColor, secondaryColor, darkMode, showVideoDetails, width } = style;
+    const { primaryColor, secondaryColor, darkMode, showVideoDetails, width, height, showTitle, showDescription } = style;
     // Check SDK initialization in an effect hook
     React__namespace.useEffect(() => {
         try {
@@ -366,6 +366,12 @@ const VideonestEmbed = ({ videoId, style = {} }) => {
         params.push('show_video_details=true');
     if (width)
         params.push(`width=${width}`);
+    if (height)
+        params.push(`height=${height}`);
+    if (showTitle)
+        params.push('show_title=true');
+    if (showDescription)
+        params.push('show_description=true');
     // Add search params to URL if any were set
     if (params.length > 0) {
         embedUrl += `?${params.join('&')}`;
