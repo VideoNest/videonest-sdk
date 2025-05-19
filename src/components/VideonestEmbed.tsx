@@ -39,7 +39,7 @@ const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) 
   if (primaryColor) params.push(`primary_color=${primaryColor.replace('#', '')}`);
   if (secondaryColor) params.push(`secondary_color=${secondaryColor.replace('#', '')}`);
   if (darkMode) params.push('dark_mode=true');
-  if (showVideoDetails) params.push('hide_video_details=true');
+  if (showVideoDetails) params.push('show_video_details=true');
   if (width) params.push(`width=${width}`);
   
   // Add search params to URL if any were set

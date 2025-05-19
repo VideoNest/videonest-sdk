@@ -2,11 +2,11 @@ import * as React from 'react';
 interface VideonestEmbedProps {
     videoId: number;
     style?: {
-        width?: string | number;
-        height?: string | number;
+        secondaryColor?: string;
         primaryColor?: string;
         darkMode?: boolean;
-        hideVideoDetails?: boolean;
+        showVideoDetails?: boolean;
+        width?: string | number;
     };
 }
 declare const VideonestEmbed: React.FC<VideonestEmbedProps>;

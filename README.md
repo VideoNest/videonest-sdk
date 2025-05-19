@@ -167,10 +167,10 @@ function MyComponent() {
       videoId={123456}
       style={{
         width: '100%',
-        height: '500px',
         primaryColor: '#ff5500',
+        secondaryColor: '#00aaff',
         darkMode: true,
-        hideVideoDetails: false
+        showVideoDetails: true
       }}
     />
   );
@@ -181,10 +181,10 @@ function MyComponent() {
 - `videoId` (number): The ID of the video to embed (required)
 - `style` (object): Styling options (optional)
   - `width` (string | number): Width of the iframe (default: '100%')
-  - `height` (string | number): Height of the iframe (default: '400px')
-  - `primaryColor` (string): Brand color for player controls
-  - `darkMode` (boolean): Enable dark theme
-  - `hideVideoDetails` (boolean): Hide video title and other metadata
+  - `primaryColor` (string): Primary brand color for player controls (hex code, with or without '#')
+  - `secondaryColor` (string): Secondary brand color for player elements (hex code, with or without '#')
+  - `darkMode` (boolean): Enable dark theme for the player
+  - `showVideoDetails` (boolean): Show video title and other metadata
 
 ## Types
 
