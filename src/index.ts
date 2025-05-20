@@ -1,6 +1,6 @@
 import { log, forceLog, setDebugMode, isDebugModeEnabled } from './utils/debug';
 import VideonestClient from './core/client';
-import { AuthResponse } from './types';
+import { VideonestConfig } from './types';
 import VideonestEmbed from './components/VideonestEmbed';
 
 export * from './types';
@@ -8,42 +8,33 @@ export { setDebugMode, isDebugModeEnabled } from './utils/debug';
 
 export { VideonestEmbed }; // Export the component
 
-// Global client instance
-let clientInstance: VideonestClient | null = null;
-
-
-export async function authVideonest(
-  channelId: number, 
-  apiKey: string
-): Promise<AuthResponse> {
-  clientInstance = new VideonestClient({
-    channelId,
-    apiKey
-  });
-  forceLog('AUTHENTICATE FORCE LOG METHOD CALLED DIRECTLY', clientInstance);
-  
-  return await clientInstance.authenticate();
+/**
+ * Upload a video to VideoNest
+ * @param file The video file to upload
+ * @param options Upload options including metadata
+ * @param config VideoNest configuration with channelId and apiKey
+ */
+export async function uploadVideo(file: File, options: any, config: VideonestConfig) {
+  const client = new VideonestClient(config);
+  return client.uploadVideo(file, options);
 }
 
-
-export function getClient(): VideonestClient {
-  if (!clientInstance) {
-    throw new Error('SDK not initialized. Call authVideonest() first.');
-  }
-  
-  return clientInstance;
+/**
+ * Get the status of a video
+ * @param videoId The ID of the video to check status
+ * @param config VideoNest configuration with channelId and apiKey
+ */
+export async function getVideoStatus(videoId: number, config: VideonestConfig) {
+  const client = new VideonestClient(config);
+  return client.getVideoStatus(videoId);
 }
 
-
-export async function uploadVideo(file: File, options: any) {
-  return getClient().uploadVideo(file, options);
-}
-
-export async function getVideoStatus(videoId: number) {
-    return getClient().getVideoStatus(videoId);
-  }
-
-export async function listVideos() {
-  return getClient().listVideos();
+/**
+ * List all videos for the channel
+ * @param config VideoNest configuration with channelId and apiKey
+ */
+export async function listVideos(config: VideonestConfig) {
+  const client = new VideonestClient(config);
+  return client.listVideos();
 }
 

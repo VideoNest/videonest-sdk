@@ -1,67 +1,17 @@
-import { VideonestConfig, VideoMetadata, UploadOptions, UploadResult, AuthResponse, VideoStatus } from '../types';
+import { VideonestConfig, VideoMetadata, UploadOptions, UploadResult, VideoStatus } from '../types';
 import { log, forceLog } from '../utils/debug';
 
 export default class VideonestClient {
   private config: VideonestConfig;
-  private authenticated: boolean = false;
-  private channelId: number = 0;
 
   constructor(config: VideonestConfig) {
     this.config = config;
-  }
-
-  async authenticate(): Promise<AuthResponse> {
-    forceLog('Authenticating with Videonest API...');
-    forceLog('Configuration:', { channelId: this.config.channelId, apiKeyProvided: !!this.config.apiKey });
-    
-    try {
-      forceLog('Making authentication request to https://api1.videonest.co/sdk/authenticate');
-      forceLog('Authentication request data:', { channelId: this.config.channelId, apiKey: this.config.apiKey });
-      const response = await fetch('https://api1.videonest.co/sdk/authenticate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          channelId: this.config.channelId,
-          apiKey: this.config.apiKey
-        }),
-      });
-      
-      forceLog(`Authentication response status: ${response.status}`);
-      const data = await response.json();
-      forceLog('Authentication response data:', data);
-      
-      if (!data.success) {
-        forceLog(`Authentication failed: ${data.message || 'Unknown error'}`);
-        this.authenticated = false;
-        return {
-          success: false,
-          message: data.message || 'Authentication failed'
-        };
-      }
-      
-      forceLog('Authentication successful');
-      this.authenticated = true;
-      this.channelId = this.config.channelId;
-      return {
-        success: true,
-        message: 'Authentication successful'
-      };
-    } catch (error) {
-      log(`Authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
-      this.authenticated = false;
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Authentication failed'
-      };
-    }
+    log('VideonestClient initialized with channelId:', config.channelId);
   }
   
   async uploadVideo(file: File, options: UploadOptions): Promise<UploadResult> {
     forceLog('Starting video upload process');
     forceLog(`File: ${file.name}, size: ${file.size} bytes`);
-    this.checkAuthentication();
     
     try {
       const { 
@@ -91,7 +41,7 @@ export default class VideonestClient {
       // Make sure channelId is included in metadata
       const uploadMetadata = {
         ...metadata,
-        channelId: metadata.channelId || this.config.channelId,
+        channelId: this.config.channelId,
       };
       forceLog('Upload metadata:', uploadMetadata);
       
@@ -109,7 +59,6 @@ export default class VideonestClient {
         formData.append('fileName', file.name);
         formData.append('fileSize', file.size.toString());
 
-        // Lets log ever
         // Add metadata to the first chunk
         if (chunkIndex === 0 && uploadMetadata) {
           formData.append('channelId', uploadMetadata.channelId.toString());
@@ -130,11 +79,12 @@ export default class VideonestClient {
         
         // Send the chunk
         forceLog(`Uploading chunk ${chunkIndex + 1}/${totalChunks} (${start}-${end} bytes)`);
-        const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/upload-chunk`, {
+        const response = await fetch(`https://api1.videonest.co/sdk/upload-chunk`, {
           method: 'POST',
           body: formData,
           headers: {
             'Authorization': `Bearer ${this.config.apiKey}`,
+            'X-Channel-ID': this.config.channelId.toString()
           },
         });
         
@@ -162,12 +112,13 @@ export default class VideonestClient {
       };
       forceLog('Finalize request data:', finalData);
       
-      const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/finalize`, {
+      const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/finalize`, {
         method: 'POST',
         body: JSON.stringify(finalData),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`,
+          'X-Channel-ID': this.config.channelId.toString()
         },
       });
       
@@ -196,28 +147,19 @@ export default class VideonestClient {
     }
   }
 
-  private checkAuthentication(): void {
-    forceLog(`Authentication check. Current status: ${this.authenticated ? 'authenticated' : 'not authenticated'}`);
-    if (!this.authenticated) {
-      forceLog('Authentication check failed. Throwing error.');
-      throw new Error('Not authenticated. Call authenticate() first.');
-    }
-    forceLog('Authentication check passed');
-  }
-  
-  
+
   private async uploadThumbnail(thumbnailFile: File, videoId: string): Promise<any> {
-    this.checkAuthentication();
     
     const formData = new FormData();
     formData.append('thumbnail', thumbnailFile);
 
     try {
-      const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos/${videoId}/send-thumbnail`, {
+      const response = await fetch(`https://api1.videonest.co/sdk/videos/${videoId}/send-thumbnail`, {
         method: 'POST',
         body: formData,
         headers: {
           'Authorization': `Bearer ${this.config.apiKey}`,
+          'X-Channel-ID': this.config.channelId.toString()
         },
       });
       
@@ -242,13 +184,13 @@ export default class VideonestClient {
   }
 
  async getVideoStatus(videoId: number): Promise<VideoStatus> {
-    this.checkAuthentication();
     
     try {
-      const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos/${videoId}/status`, {
+      const response = await fetch(`https://api1.videonest.co/sdk/videos/${videoId}/status`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.config.apiKey}`,
+          'X-Channel-ID': this.config.channelId.toString()
         },
       });
       
@@ -264,14 +206,14 @@ export default class VideonestClient {
   }
 
   async listVideos(): Promise<{ success: boolean, videos?: any[], message?: string }> {
-    this.checkAuthentication();
-    log('Fetching videos for channel ID:', this.channelId);
+    log('Fetching videos for channel ID:', this.config.channelId);
     
     try {
-      const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos`, {
+      const response = await fetch(`https://api1.videonest.co/sdk/videos`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.config.apiKey}`,
+          'X-Channel-ID': this.config.channelId.toString()
         },
       });
       

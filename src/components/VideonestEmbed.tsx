@@ -1,14 +1,14 @@
 import * as React from 'react';
-import { getClient } from '../index';
+import { VideonestConfig } from '../types';
 import { log, forceLog } from '../utils/debug';
 
 interface VideonestEmbedProps {
   videoId: number;
+  config: VideonestConfig;
   style?: {
     secondaryColor?: string;
     primaryColor?: string;
     darkMode?: boolean;
-    showVideoDetails?: boolean;
     width?: string | number;
     height?: string | number;
     showTitle?: boolean;
@@ -16,57 +16,53 @@ interface VideonestEmbedProps {
   };
 }
 
-const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, style = {} }) => {
-  // Default styles
-  const defaultWidth = '100%';
-  const defaultHeight = '400px';
-  
-  // Use state to track initialization
-  const [sdkInitialized, setSdkInitialized] = React.useState(false);
-  const {primaryColor, secondaryColor, darkMode, showVideoDetails, width, height, showTitle, showDescription} = style;
-  
-  // Check SDK initialization in an effect hook
-  React.useEffect(() => {
-    try {
-      getClient();
-      setSdkInitialized(true);
-    } catch (e) {
-      setSdkInitialized(false);
-    }
-  }, []); // Empty dependency array means this runs once on mount
-  
-  // Build URL with style parameters if provided
+const VideonestEmbed: React.FC<VideonestEmbedProps> = ({ videoId, config, style = {} }) => {
+  const { primaryColor, secondaryColor, darkMode, width, height, showTitle, showDescription } = style;
+
   let embedUrl = `https://app.videonest.co/embed/single/${videoId}`;
   const params: string[] = [];
-  
+
   if (primaryColor) params.push(`primary_color=${primaryColor.replace('#', '')}`);
   if (secondaryColor) params.push(`secondary_color=${secondaryColor.replace('#', '')}`);
   if (darkMode) params.push('dark_mode=true');
-  if (showVideoDetails) params.push('show_video_details=true');
   if (width) params.push(`width=${width}`);
   if (height) params.push(`height=${height}`);
   if (showTitle) params.push('show_title=true');
   if (showDescription) params.push('show_description=true');
   
-  // Add search params to URL if any were set
+  // Add authentication parameters
+  params.push(`channel_id=${config.channelId}`);
+  params.push(`api_key=${config.apiKey}`);
+
   if (params.length > 0) {
     embedUrl += `?${params.join('&')}`;
   }
-  
-  // Render loading or error state when SDK is not initialized
-  if (!sdkInitialized) {
-    return React.createElement('div', null, 'Please initialize Videonest SDK first using authVideonest()');
-  }
-  
-  // Use React.createElement for the iframe for maximum compatibility
-  return React.createElement('iframe', {
-    src: embedUrl,
-    width: style.width || defaultWidth,
-    frameBorder: '0',
-    allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
-    allowFullScreen: true,
-    title: `Videonest video ${videoId}`
-  });
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: style.width || '100%',
+        height: 0,
+        paddingBottom: '56.25%',
+      }}
+    >
+      <iframe
+        src={embedUrl}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+        }}
+        frameBorder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        title={`Videonest video ${videoId}`}
+      />
+    </div>
+  );
 };
 
 export default VideonestEmbed;

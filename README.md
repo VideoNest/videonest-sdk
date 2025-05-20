@@ -11,11 +11,11 @@ Official SDK for uploading, managing, and embedding videos with the VideoNest pl
 - [Authentication](#authentication)
 - [Debug Mode](#debug-mode)
 - [SDK Functions](#sdk-functions)
-  - [Authentication](#authentication-1)
   - [Upload Video](#upload-video)
   - [Get Video Status](#get-video-status)
   - [List Videos](#list-videos)
 - [Video Embedding](#video-embedding)
+  - [Styling Recommendations](#styling-recommendations)
 - [Webhooks](#webhooks)
 - [Types](#types)
 
@@ -41,6 +41,25 @@ A complete example implementation of the VideoNest SDK is available at:
 
 This repository demonstrates how to properly integrate and use all features of the VideoNest SDK in a real-world application, including authentication, video uploads, embedding, and webhook processing.
 
+## Authentication
+
+The VideoNest SDK uses a simplified authentication approach where your credentials (channel ID and API key) are provided with each API call. There is no need to authenticate separately before using the SDK.
+
+```javascript
+import { uploadVideo, getVideoStatus, listVideos } from 'videonest-sdk';
+
+// Your VideoNest credentials
+const config = {
+  channelId: 12345,
+  apiKey: 'your-api-key'
+};
+
+// Use the credentials with each API call
+uploadVideo(fileObject, options, config);
+getVideoStatus(videoId, config);
+listVideos(config);
+```
+
 ## Debug Mode
 
 The SDK includes a configurable debug mode that controls logging output:
@@ -61,28 +80,10 @@ setDebugMode(false);
 
 ## SDK Functions
 
-### Authentication
-
-```typescript
-async function authVideonest(channelId: number, apiKey: string): Promise<AuthResponse>
-```
-
-**Arguments:**
-- `channelId` (number): Your VideoNest channel ID
-- `apiKey` (string): Your VideoNest API key
-
-**Returns:**
-```typescript
-AuthResponse {
-  success: boolean;
-  message: string;
-}
-```
-
 ### Upload Video
 
 ```typescript
-async function uploadVideo(file: File, options: UploadOptions): Promise<UploadResult>
+async function uploadVideo(file: File, options: UploadOptions, config: VideonestConfig): Promise<UploadResult>
 ```
 **Arguments:**
 - `file` (File): The video file to upload
@@ -91,11 +92,13 @@ async function uploadVideo(file: File, options: UploadOptions): Promise<UploadRe
     - `title` (string): Video title (required)
     - `description` (string): Video description (optional)
     - `tags` (string[] | string): Video tags (optional)
-    - `channelId` (number): Override the channel ID (optional)
   - `thumbnail` (File): Thumbnail image file (required)
   - `chunkSize` (number): Size in bytes for upload chunks (optional, default: 2MB)
   - `onProgress` (function): Progress callback (optional)
   - `autoGenerateThumbnail` (boolean): Whether to auto-generate thumbnail (optional)
+- `config` (VideonestConfig): Your VideoNest credentials
+  - `channelId` (number): Your VideoNest channel ID
+  - `apiKey` (string): Your VideoNest API key
 
 **Returns:**
 ```typescript
@@ -111,11 +114,14 @@ UploadResult {
 ### Get Video Status
 
 ```typescript
-async function getVideoStatus(videoId: number): Promise<VideoStatus>
+async function getVideoStatus(videoId: number, config: VideonestConfig): Promise<VideoStatus>
 ```
 
 **Arguments:**
 - `videoId` (number): ID of the video to check
+- `config` (VideonestConfig): Your VideoNest credentials
+  - `channelId` (number): Your VideoNest channel ID
+  - `apiKey` (string): Your VideoNest API key
 
 **Returns:**
 ```typescript
@@ -131,11 +137,13 @@ Note possible statuses: "uploading", "reencoding", "completed", "failure"
 ### List Videos
 
 ```typescript
-async function listVideos(): Promise<{success: boolean, videos?: any[], message?: string}>
+async function listVideos(config: VideonestConfig): Promise<{success: boolean, videos?: any[], message?: string}>
 ```
 
 **Arguments:**
-None - Uses the authenticated channel ID
+- `config` (VideonestConfig): Your VideoNest credentials
+  - `channelId` (number): Your VideoNest channel ID
+  - `apiKey` (string): Your VideoNest API key
 
 **Returns:**
 ```typescript
@@ -162,15 +170,24 @@ The SDK includes a React component for embedding videos:
 import { VideonestEmbed } from 'videonest-sdk';
 
 function MyComponent() {
+  // Your VideoNest credentials (required)
+  const config = {
+    channelId: 12345,
+    apiKey: 'your-api-key'
+  };
+
   return (
     <VideonestEmbed
       videoId={123456}
+      config={config}
       style={{
         width: '100%',
+        height: '400px', // Explicitly set height for proper rendering
         primaryColor: '#ff5500',
         secondaryColor: '#00aaff',
         darkMode: true,
-        showVideoDetails: true
+        showTitle: true,
+        showDescription: true
       }}
     />
   );
@@ -179,19 +196,89 @@ function MyComponent() {
 
 **Props:**
 - `videoId` (number): The ID of the video to embed (required)
+- `config` (VideonestConfig): Your VideoNest credentials (required)
+  - `channelId` (number): Your VideoNest channel ID
+  - `apiKey` (string): Your VideoNest API key
 - `style` (object): Styling options (optional)
-  - `width` (string | number): Width of the iframe (default: '100%')
+  - `width` (string | number): Width of the embed container (default: '100%')
+  - `height` (string | number): Height of the embed container (optional, overrides default 16:9 ratio)
   - `primaryColor` (string): Primary brand color for player controls (hex code, with or without '#')
   - `secondaryColor` (string): Secondary brand color for player elements (hex code, with or without '#')
   - `darkMode` (boolean): Enable dark theme for the player
-  - `showVideoDetails` (boolean): Show video title and other metadata
+  - `showTitle` (boolean): Show video title
+  - `showDescription` (boolean): Show video description
+
+### Styling Recommendations
+
+#### Responsive Design & Aspect Ratio
+
+**Important aspect ratio behavior:**
+- The `VideonestEmbed` component container defaults to a **16:9 aspect ratio**
+- The actual video content inside the player maintains its original aspect ratio
+- Videos with different aspect ratios (vertical, square, etc.) will display correctly with letterboxing/pillarboxing as needed
+
+You have several options for controlling the size:
+
+1. **Default responsive behavior** (recommended):
+   ```jsx
+   {/* The component maintains 16:9 aspect ratio at any width */}
+   <VideonestEmbed 
+     videoId={123456} 
+     config={config}
+     style={{ width: '100%' }} {/* Width can be any value - the height will adjust automatically */}
+   />
+   ```
+
+2. **Custom height** (overrides the default 16:9 ratio):
+   ```jsx
+   <VideonestEmbed 
+     videoId={123456} 
+     config={config}
+     style={{ width: '100%', height: '400px' }} {/* Explicit height overrides aspect ratio */}
+   />
+   ```
+
+3. **Container width control**:
+   ```jsx
+   {/* Control maximum width while maintaining aspect ratio */}
+   <div style={{ maxWidth: '800px' }}>
+     <VideonestEmbed videoId={123456} config={config} />
+   </div>
+   ```
+
+> **Note:** The component already implements responsive sizing internally. There's no need to wrap it in another aspect ratio container.
+
+#### Mobile Considerations
+
+For mobile devices:
+
+- Consider using higher height values on smaller screens for better visibility
+- Test your embed at various screen sizes to ensure optimal viewing experience
+- You may need different height values for desktop vs. mobile views:
+
+```jsx
+// Example of responsive sizing with media queries
+<div className="video-container" style={{
+  height: window.innerWidth < 768 ? '300px' : '500px',
+  width: '100%'
+}}>
+  <VideonestEmbed videoId={123456} config={config} />
+</div>
+```
+
+#### Description Text
+
+For optimal user experience with descriptions:
+
+1. Keep descriptions concise (1-2 lines recommended)
+2. For longer descriptions, consider limiting to 2-3 sentences
+3. Use the video title for the most important information
 
 ## Types
 
 The SDK exports the following TypeScript interfaces:
 
-- `VideonestConfig`: Configuration for SDK initialization
-- `AuthResponse`: Authentication response
+- `VideonestConfig`: Configuration containing channel ID and API key
 - `VideoMetadata`: Metadata for video uploads
 - `UploadOptions`: Options for video uploads
 - `UploadResult`: Result of a video upload
