@@ -117,12 +117,11 @@ class VideonestClient {
                 }
                 // Send the chunk
                 forceLog(`Uploading chunk ${chunkIndex + 1}/${totalChunks} (${start}-${end} bytes)`);
-                const response = await fetch(`https://api1.videonest.co/sdk/upload-chunk`, {
+                const response = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/upload-chunk`, {
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'Authorization': `Bearer ${this.config.apiKey}`,
-                        'X-Channel-ID': this.config.channelId.toString()
+                        'Authorization': `Bearer ${this.config.apiKey}`
                     },
                 });
                 forceLog(`Chunk ${chunkIndex + 1} response status: ${response.status}`);
@@ -145,13 +144,12 @@ class VideonestClient {
                 totalChunks: totalChunks.toString()
             };
             forceLog('Finalize request data:', finalData);
-            const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/finalize`, {
+            const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/finalize`, {
                 method: 'POST',
                 body: JSON.stringify(finalData),
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'X-Channel-ID': this.config.channelId.toString()
+                    'Authorization': `Bearer ${this.config.apiKey}`
                 },
             });
             forceLog(`Finalize response status: ${finalizeResponse.status}`);
@@ -180,12 +178,11 @@ class VideonestClient {
         const formData = new FormData();
         formData.append('thumbnail', thumbnailFile);
         try {
-            const response = await fetch(`https://api1.videonest.co/sdk/videos/${videoId}/send-thumbnail`, {
+            const response = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/videos/${videoId}/send-thumbnail`, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'X-Channel-ID': this.config.channelId.toString()
+                    'Authorization': `Bearer ${this.config.apiKey}`
                 },
             });
             const result = await response.json();
@@ -207,11 +204,10 @@ class VideonestClient {
     }
     async getVideoStatus(videoId) {
         try {
-            const response = await fetch(`https://api1.videonest.co/sdk/videos/${videoId}/status`, {
+            const response = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/videos/${videoId}/status`, {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'X-Channel-ID': this.config.channelId.toString()
+                    'Authorization': `Bearer ${this.config.apiKey}`
                 },
             });
             const result = await response.json();
@@ -227,11 +223,10 @@ class VideonestClient {
     async listVideos() {
         log('Fetching videos for channel ID:', this.config.channelId);
         try {
-            const response = await fetch(`https://api1.videonest.co/sdk/videos`, {
+            const response = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/videos`, {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'X-Channel-ID': this.config.channelId.toString()
+                    'Authorization': `Bearer ${this.config.apiKey}`
                 },
             });
             log(`Videos list response status: ${response.status}`);
