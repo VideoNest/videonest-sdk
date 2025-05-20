@@ -2,10 +2,6 @@ export interface VideonestConfig {
     channelId: number;
     apiKey: string;
 }
-export interface AuthResponse {
-    success: boolean;
-    message: string;
-}
 export interface VideoMetadata {
     title: string;
     description?: string;

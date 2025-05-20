@@ -85,58 +85,12 @@ function forceLog(message, ...args) {
 
 class VideonestClient {
     constructor(config) {
-        this.authenticated = false;
-        this.channelId = 0;
         this.config = config;
-    }
-    async authenticate() {
-        forceLog('Authenticating with Videonest API...');
-        forceLog('Configuration:', { channelId: this.config.channelId, apiKeyProvided: !!this.config.apiKey });
-        try {
-            forceLog('Making authentication request to https://api1.videonest.co/sdk/authenticate');
-            forceLog('Authentication request data:', { channelId: this.config.channelId, apiKey: this.config.apiKey });
-            const response = await fetch('https://api1.videonest.co/sdk/authenticate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    channelId: this.config.channelId,
-                    apiKey: this.config.apiKey
-                }),
-            });
-            forceLog(`Authentication response status: ${response.status}`);
-            const data = await response.json();
-            forceLog('Authentication response data:', data);
-            if (!data.success) {
-                forceLog(`Authentication failed: ${data.message || 'Unknown error'}`);
-                this.authenticated = false;
-                return {
-                    success: false,
-                    message: data.message || 'Authentication failed'
-                };
-            }
-            forceLog('Authentication successful');
-            this.authenticated = true;
-            this.channelId = this.config.channelId;
-            return {
-                success: true,
-                message: 'Authentication successful'
-            };
-        }
-        catch (error) {
-            log(`Authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
-            this.authenticated = false;
-            return {
-                success: false,
-                message: error instanceof Error ? error.message : 'Authentication failed'
-            };
-        }
+        log('VideonestClient initialized with channelId:', config.channelId);
     }
     async uploadVideo(file, options) {
         forceLog('Starting video upload process');
         forceLog(`File: ${file.name}, size: ${file.size} bytes`);
-        this.checkAuthentication();
         try {
             const { metadata, chunkSize = 2 * 1024 * 1024, onProgress = () => { }, thumbnail } = options;
             // Check if thumbnail is provided
@@ -156,7 +110,7 @@ class VideonestClient {
             // Make sure channelId is included in metadata
             const uploadMetadata = {
                 ...metadata,
-                channelId: metadata.channelId || this.config.channelId,
+                channelId: this.config.channelId,
             };
             forceLog('Upload metadata:', uploadMetadata);
             // Upload file in chunks
@@ -171,7 +125,6 @@ class VideonestClient {
                 formData.append('totalChunks', totalChunks.toString());
                 formData.append('fileName', file.name);
                 formData.append('fileSize', file.size.toString());
-                // Lets log ever
                 // Add metadata to the first chunk
                 if (chunkIndex === 0 && uploadMetadata) {
                     formData.append('channelId', uploadMetadata.channelId.toString());
@@ -191,11 +144,12 @@ class VideonestClient {
                 }
                 // Send the chunk
                 forceLog(`Uploading chunk ${chunkIndex + 1}/${totalChunks} (${start}-${end} bytes)`);
-                const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/upload-chunk`, {
+                const response = await fetch(`https://api1.videonest.co/sdk/upload-chunk`, {
                     method: 'POST',
                     body: formData,
                     headers: {
                         'Authorization': `Bearer ${this.config.apiKey}`,
+                        'X-Channel-ID': this.config.channelId.toString()
                     },
                 });
                 forceLog(`Chunk ${chunkIndex + 1} response status: ${response.status}`);
@@ -218,12 +172,13 @@ class VideonestClient {
                 totalChunks: totalChunks.toString()
             };
             forceLog('Finalize request data:', finalData);
-            const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/finalize`, {
+            const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/finalize`, {
                 method: 'POST',
                 body: JSON.stringify(finalData),
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.config.apiKey}`,
+                    'X-Channel-ID': this.config.channelId.toString()
                 },
             });
             forceLog(`Finalize response status: ${finalizeResponse.status}`);
@@ -248,24 +203,16 @@ class VideonestClient {
             };
         }
     }
-    checkAuthentication() {
-        forceLog(`Authentication check. Current status: ${this.authenticated ? 'authenticated' : 'not authenticated'}`);
-        if (!this.authenticated) {
-            forceLog('Authentication check failed. Throwing error.');
-            throw new Error('Not authenticated. Call authenticate() first.');
-        }
-        forceLog('Authentication check passed');
-    }
     async uploadThumbnail(thumbnailFile, videoId) {
-        this.checkAuthentication();
         const formData = new FormData();
         formData.append('thumbnail', thumbnailFile);
         try {
-            const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos/${videoId}/send-thumbnail`, {
+            const response = await fetch(`https://api1.videonest.co/sdk/videos/${videoId}/send-thumbnail`, {
                 method: 'POST',
                 body: formData,
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
+                    'X-Channel-ID': this.config.channelId.toString()
                 },
             });
             const result = await response.json();
@@ -286,12 +233,12 @@ class VideonestClient {
         });
     }
     async getVideoStatus(videoId) {
-        this.checkAuthentication();
         try {
-            const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos/${videoId}/status`, {
+            const response = await fetch(`https://api1.videonest.co/sdk/videos/${videoId}/status`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
+                    'X-Channel-ID': this.config.channelId.toString()
                 },
             });
             const result = await response.json();
@@ -305,13 +252,13 @@ class VideonestClient {
         }
     }
     async listVideos() {
-        this.checkAuthentication();
-        log('Fetching videos for channel ID:', this.channelId);
+        log('Fetching videos for channel ID:', this.config.channelId);
         try {
-            const response = await fetch(`https://api1.videonest.co/sdk/${this.channelId.toString()}/videos`, {
+            const response = await fetch(`https://api1.videonest.co/sdk/videos`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
+                    'X-Channel-ID': this.config.channelId.toString()
                 },
             });
             log(`Videos list response status: ${response.status}`);
@@ -337,23 +284,8 @@ class VideonestClient {
     }
 }
 
-const VideonestEmbed = ({ videoId, style = {} }) => {
-    // Default styles
-    const defaultWidth = '100%';
-    // Use state to track initialization
-    const [sdkInitialized, setSdkInitialized] = React__namespace.useState(false);
-    const { primaryColor, secondaryColor, darkMode, showVideoDetails, width, height, showTitle, showDescription } = style;
-    // Check SDK initialization in an effect hook
-    React__namespace.useEffect(() => {
-        try {
-            getClient();
-            setSdkInitialized(true);
-        }
-        catch (e) {
-            setSdkInitialized(false);
-        }
-    }, []); // Empty dependency array means this runs once on mount
-    // Build URL with style parameters if provided
+const VideonestEmbed = ({ videoId, config, style = {} }) => {
+    const { primaryColor, secondaryColor, darkMode, width, height, showTitle, showDescription } = style;
     let embedUrl = `https://app.videonest.co/embed/single/${videoId}`;
     const params = [];
     if (primaryColor)
@@ -362,8 +294,6 @@ const VideonestEmbed = ({ videoId, style = {} }) => {
         params.push(`secondary_color=${secondaryColor.replace('#', '')}`);
     if (darkMode)
         params.push('dark_mode=true');
-    if (showVideoDetails)
-        params.push('show_video_details=true');
     if (width)
         params.push(`width=${width}`);
     if (height)
@@ -372,54 +302,56 @@ const VideonestEmbed = ({ videoId, style = {} }) => {
         params.push('show_title=true');
     if (showDescription)
         params.push('show_description=true');
-    // Add search params to URL if any were set
+    // Add authentication parameters
+    params.push(`channel_id=${config.channelId}`);
+    params.push(`api_key=${config.apiKey}`);
     if (params.length > 0) {
         embedUrl += `?${params.join('&')}`;
     }
-    // Render loading or error state when SDK is not initialized
-    if (!sdkInitialized) {
-        return React__namespace.createElement('div', null, 'Please initialize Videonest SDK first using authVideonest()');
-    }
-    // Use React.createElement for the iframe for maximum compatibility
-    return React__namespace.createElement('iframe', {
-        src: embedUrl,
-        width: style.width || defaultWidth,
-        frameBorder: '0',
-        allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
-        allowFullScreen: true,
-        title: `Videonest video ${videoId}`
-    });
+    return (React__namespace.createElement("div", { style: {
+            position: 'relative',
+            width: style.width || '100%',
+            height: 0,
+            paddingBottom: '56.25%',
+        } },
+        React__namespace.createElement("iframe", { src: embedUrl, style: {
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+            }, frameBorder: "0", allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture", allowFullScreen: true, title: `Videonest video ${videoId}` })));
 };
 
-// Global client instance
-let clientInstance = null;
-async function authVideonest(channelId, apiKey) {
-    clientInstance = new VideonestClient({
-        channelId,
-        apiKey
-    });
-    forceLog('AUTHENTICATE FORCE LOG METHOD CALLED DIRECTLY', clientInstance);
-    return await clientInstance.authenticate();
+/**
+ * Upload a video to VideoNest
+ * @param file The video file to upload
+ * @param options Upload options including metadata
+ * @param config VideoNest configuration with channelId and apiKey
+ */
+async function uploadVideo(file, options, config) {
+    const client = new VideonestClient(config);
+    return client.uploadVideo(file, options);
 }
-function getClient() {
-    if (!clientInstance) {
-        throw new Error('SDK not initialized. Call authVideonest() first.');
-    }
-    return clientInstance;
+/**
+ * Get the status of a video
+ * @param videoId The ID of the video to check status
+ * @param config VideoNest configuration with channelId and apiKey
+ */
+async function getVideoStatus(videoId, config) {
+    const client = new VideonestClient(config);
+    return client.getVideoStatus(videoId);
 }
-async function uploadVideo(file, options) {
-    return getClient().uploadVideo(file, options);
-}
-async function getVideoStatus(videoId) {
-    return getClient().getVideoStatus(videoId);
-}
-async function listVideos() {
-    return getClient().listVideos();
+/**
+ * List all videos for the channel
+ * @param config VideoNest configuration with channelId and apiKey
+ */
+async function listVideos(config) {
+    const client = new VideonestClient(config);
+    return client.listVideos();
 }
 
 exports.VideonestEmbed = VideonestEmbed;
-exports.authVideonest = authVideonest;
-exports.getClient = getClient;
 exports.getVideoStatus = getVideoStatus;
 exports.isDebugModeEnabled = isDebugModeEnabled;
 exports.listVideos = listVideos;

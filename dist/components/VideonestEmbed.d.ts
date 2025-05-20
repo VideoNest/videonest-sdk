@@ -1,11 +1,12 @@
 import * as React from 'react';
+import { VideonestConfig } from '../types';
 interface VideonestEmbedProps {
     videoId: number;
+    config: VideonestConfig;
     style?: {
         secondaryColor?: string;
         primaryColor?: string;
         darkMode?: boolean;
-        showVideoDetails?: boolean;
         width?: string | number;
         height?: string | number;
         showTitle?: boolean;
