@@ -1,6 +1,6 @@
 {
   "name": "videonest-sdk",
-  "version": "0.7.6",
+  "version": "0.7.8",
   "description": "SDK for uploading and streaming videos via the Videonest API",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",

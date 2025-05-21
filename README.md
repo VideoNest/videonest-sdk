@@ -213,58 +213,8 @@ function MyComponent() {
 #### Responsive Design & Aspect Ratio
 
 **Important aspect ratio behavior:**
-- The `VideonestEmbed` component container defaults to a **16:9 aspect ratio**
-- The actual video content inside the player maintains its original aspect ratio
-- Videos with different aspect ratios (vertical, square, etc.) will display correctly with letterboxing/pillarboxing as needed
+- The `VideonestEmbed` component container has no set aspect ratio and will display at the size of the container its placed in. The player will maintain its own internal aspect ratio internally, using black bars to fill any extra space.
 
-You have several options for controlling the size:
-
-1. **Default responsive behavior** (recommended):
-   ```jsx
-   {/* The component maintains 16:9 aspect ratio at any width */}
-   <VideonestEmbed 
-     videoId={123456} 
-     config={config}
-     style={{ width: '100%' }} {/* Width can be any value - the height will adjust automatically */}
-   />
-   ```
-
-2. **Custom height** (overrides the default 16:9 ratio):
-   ```jsx
-   <VideonestEmbed 
-     videoId={123456} 
-     config={config}
-     style={{ width: '100%', height: '400px' }} {/* Explicit height overrides aspect ratio */}
-   />
-   ```
-
-3. **Container width control**:
-   ```jsx
-   {/* Control maximum width while maintaining aspect ratio */}
-   <div style={{ maxWidth: '800px' }}>
-     <VideonestEmbed videoId={123456} config={config} />
-   </div>
-   ```
-
-> **Note:** The component already implements responsive sizing internally. There's no need to wrap it in another aspect ratio container.
-
-#### Mobile Considerations
-
-For mobile devices:
-
-- Consider using higher height values on smaller screens for better visibility
-- Test your embed at various screen sizes to ensure optimal viewing experience
-- You may need different height values for desktop vs. mobile views:
-
-```jsx
-// Example of responsive sizing with media queries
-<div className="video-container" style={{
-  height: window.innerWidth < 768 ? '300px' : '500px',
-  width: '100%'
-}}>
-  <VideonestEmbed videoId={123456} config={config} />
-</div>
-```
 
 #### Description Text
 
