@@ -3,8 +3,8 @@ export default class VideonestClient {
     private config;
     constructor(config: VideonestConfig);
     uploadVideo(file: File, options: UploadOptions): Promise<UploadResult>;
+    private trackVideoUpload;
     private uploadThumbnail;
-    private generateUUID;
     getVideoStatus(videoId: number): Promise<VideoStatus>;
     listVideos(): Promise<{
         success: boolean;

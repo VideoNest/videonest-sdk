@@ -43,22 +43,38 @@ This repository demonstrates how to properly integrate and use all features of t
 
 ## Authentication
 
-The VideoNest SDK uses a simplified authentication approach where your credentials (channel ID and API key) are provided with each API call. There is no need to authenticate separately before using the SDK.
+The VideoNest SDK uses header-based authentication where your credentials (channel ID and API key) are automatically attached as request headers for all API calls. This simplifies the API by eliminating the need for separate authentication steps.
 
 ```javascript
-import { uploadVideo, getVideoStatus, listVideos } from 'videonest-sdk';
+import { uploadVideo, getVideoStatus, listVideos, initializeVideonest } from 'videonest-sdk';
 
-// Your VideoNest credentials
+// Option 1: Initialize the SDK once with default credentials (recommended)
+initializeVideonest({
+  channelId: 12345, // Number type
+  apiKey: 'your-api-key'
+});
+
+// Then make API calls without passing credentials each time
+uploadVideo(fileObject, options);
+getVideoStatus(videoId);
+listVideos();
+
+// Option 2: Or provide credentials with each API call
 const config = {
-  channelId: 12345,
+  channelId: 12345, // Number type
   apiKey: 'your-api-key'
 };
 
-// Use the credentials with each API call
+// Pass credentials directly to each API call
 uploadVideo(fileObject, options, config);
 getVideoStatus(videoId, config);
 listVideos(config);
 ```
+
+**Authentication Headers:**
+Behind the scenes, the SDK automatically adds the following headers to all API requests:
+- `X-API-Key`: Your VideoNest API key
+- `X-Channel-ID`: Your VideoNest channel ID
 
 ## Debug Mode
 
@@ -92,13 +108,13 @@ async function uploadVideo(file: File, options: UploadOptions, config: Videonest
     - `title` (string): Video title (required)
     - `description` (string): Video description (optional)
     - `tags` (string[] | string): Video tags (optional)
+    - `channelId` (number): Your VideoNest channel ID (required)
   - `thumbnail` (File): Thumbnail image file (required)
-  - `chunkSize` (number): Size in bytes for upload chunks (optional, default: 2MB)
   - `onProgress` (function): Progress callback (optional)
-  - `autoGenerateThumbnail` (boolean): Whether to auto-generate thumbnail (optional)
 - `config` (VideonestConfig): Your VideoNest credentials
   - `channelId` (number): Your VideoNest channel ID
   - `apiKey` (string): Your VideoNest API key
+  - `baseUrl` (string): API base URL (optional)
 
 **Returns:**
 ```typescript
@@ -111,6 +127,28 @@ UploadResult {
 }
 ```
 
+**Advanced Upload Features:**
+
+The VideoNest SDK includes intelligent chunked uploading with network-based optimizations:
+
+- **Adaptive Chunk Sizing**: Automatically adjusts chunk sizes based on file size and network conditions
+  - Small files (<50MB): 5MB chunks
+  - Medium files (<500MB): 15MB chunks
+  - Large files (<2GB): 35MB chunks
+  - Very large files (>2GB): 75MB chunks
+
+- **Network Speed Detection**: Further optimizes chunk sizes based on detected upload speeds:
+  - Fast connections (>50 Mbps): Up to 150MB chunks
+  - Good connections (>15 Mbps): Up to 100MB chunks
+  - Decent connections (>8 Mbps): Up to 50MB chunks
+  - Slow connections (<3 Mbps): As small as 1MB chunks
+
+- **Parallel Upload**: Dynamically adjusts the number of concurrent uploads based on network performance
+
+- **Automatic Retry**: Failed chunks are automatically retried with exponential backoff
+
+- **Progress Tracking**: Detailed progress reporting via the onProgress callback
+
 ### Get Video Status
 
 ```typescript
@@ -122,43 +160,75 @@ async function getVideoStatus(videoId: number, config: VideonestConfig): Promise
 - `config` (VideonestConfig): Your VideoNest credentials
   - `channelId` (number): Your VideoNest channel ID
   - `apiKey` (string): Your VideoNest API key
+  - `baseUrl` (string): API base URL (optional)
 
 **Returns:**
 ```typescript
-VideoStatus {
+{
   success: boolean;
-  message: string;
-  status: string;
-  videoId: number;
+  status: string; // 'uploading', 'reencoding', 'failed', 'completed', or 'unknown'
+  video: {
+    id: number;
+    title: string;
+    description: string;
+    tags: string[];
+    thumbnail: string;
+    published_at: string;
+  }
 }
 ```
-Note possible statuses: "uploading", "reencoding", "completed", "failure"
+
+**Status Values:**
+- `uploading`: The video is still being uploaded
+- `reencoding`: The video has been uploaded and is being processed/encoded
+- `failed`: The encoding process failed
+- `completed`: The video is fully processed and ready to view
+- `unknown`: The system could not determine the status
 
 ### List Videos
 
 ```typescript
-async function listVideos(config: VideonestConfig): Promise<{success: boolean, videos?: any[], message?: string}>
+async function listVideos(config: VideonestConfig): Promise<{success: boolean, videos?: Video[], message?: string, totalUploaded?: number, failed?: number, reencoding?: number}>
 ```
 
 **Arguments:**
 - `config` (VideonestConfig): Your VideoNest credentials
   - `channelId` (number): Your VideoNest channel ID
   - `apiKey` (string): Your VideoNest API key
+  - `baseUrl` (string): API base URL (optional)
 
 **Returns:**
 ```typescript
 {
   success: boolean;
-  videos?: {
-    id: number;
-    title: string;
-    description: string;
-    tags: string;
-    published_at: Date; // Prisma DateTime, ISO format string
-    orientation: string;
-    thumbnail: string;
-  }[];
-  message?: string;
+  videos?: [
+    {
+      id: number;
+      title: string;
+      description: string;
+      tags: string[];
+      thumbnail: string;
+      duration: number;
+      published_at: string; // ISO format string
+      orientation: string;
+      status: string; // 'uploading', 'reencoding', 'completed', 'failed', or 'unknown'
+      hosted_files: [
+        {
+          id: number;
+          hosted_url: string;
+          file_size: number;
+          file_type: string;
+          width: number;
+          height: number;
+        }
+      ]
+    }
+  ];
+  // Summary statistics
+  totalUploaded: number; // Count of completed videos
+  failed: number;        // Count of failed videos
+  reencoding: number;    // Count of videos currently being processed
+  message?: string;      // Error message if success is false
 }
 ```
 

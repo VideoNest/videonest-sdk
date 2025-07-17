@@ -1,12 +1,13 @@
 export interface VideonestConfig {
     channelId: number;
     apiKey: string;
+    baseUrl?: string;
 }
 export interface VideoMetadata {
     title: string;
+    channelId: number;
     description?: string;
     tags?: string[] | string;
-    channelId?: number;
 }
 export interface UploadOptions {
     chunkSize?: number;

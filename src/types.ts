@@ -17,8 +17,7 @@ export interface VideonestConfig {
     chunkSize?: number; // Size in bytes, default to 2MB
     onProgress?: (progress: number) => void;
     metadata: VideoMetadata;
-    thumbnail?: File;
-    autoGenerateThumbnail?: boolean;
+    thumbnail: File; // Required: thumbnail must be provided by user
   }
   
   export interface VideoStatus {
