@@ -307,7 +307,7 @@ class UploadOptimizationManager {
                 }
             };
             // Use v2 route like frontend
-            xhr.open('POST', `${baseUrl}/upload/videos/upload-chunk-v2`);
+            xhr.open('POST', `${baseUrl}/sdk/${this.config.channelId}/upload-chunk-v2`);
             xhr.setRequestHeader('Authorization', `Bearer ${this.config.apiKey}`);
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
