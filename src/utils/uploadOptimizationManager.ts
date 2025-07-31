@@ -277,7 +277,7 @@ export class UploadOptimizationManager {
             if (!result.success) {
               reject(new Error(result.message || 'Chunk upload failed'));
             } else {
-              const uploadTime = Date.now() - startTime;
+            const uploadTime = Date.now() - startTime;
               const currentSpeed = this.speedDetector.recordChunkUpload(chunkSize, uploadTime);
               
               this.activeUploads.delete(index);
