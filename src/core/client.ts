@@ -18,17 +18,6 @@ export default class VideonestClient {
     forceLog('Starting optimized video upload process');
     forceLog(`File: ${file.name}, size: ${file.size} bytes`);
     
-    // Track upload start
-    await this.trackVideoUpload('start', {
-      sessionId,
-      userId: 'SDK',
-      filename: file.name,
-      fileSize: file.size,
-      chunksCount: 0, // Will be calculated
-      startTime,
-      status: 'in_progress'
-    });
-    
     try {
       const { 
         metadata, 
@@ -54,27 +43,54 @@ export default class VideonestClient {
       };
       forceLog('Upload metadata:', uploadMetadata);
       
-      // Create upload optimization manager
+      // Get estimated chunk count before starting
       const uploadManager = new UploadOptimizationManager(
         file, 
         uploadMetadata, 
         this.config
       );
+      const estimatedChunks = uploadManager.getTotalChunks();
       
-      // Upload with optimization
+      // Track upload start with estimated chunk count
+      await this.trackVideoUpload('start', {
+        sessionId,
+        userId: 'SDK',
+        filename: file.name,
+        fileSize: file.size,
+        chunksCount: estimatedChunks,
+        startTime,
+        status: 'in_progress'
+      });
+      
+      // Upload chunks with optimization
       const { uploadId, totalChunks } = await uploadManager.upload(onProgress);
       
       forceLog(`All chunks uploaded. Finalizing upload... (uploadId: ${uploadId}, totalChunks: ${totalChunks})`);
       
-      // Finalize the upload
+      // Update session with actual chunk count if different
+      if (totalChunks !== estimatedChunks) {
+        await this.trackVideoUpload('chunks_complete', {
+          sessionId,
+          userId: 'SDK',
+          chunksCount: totalChunks,
+          status: 'chunks_completed'
+        });
+      }
+      
+      // Finalize using v2 route with metadata in request body
       const finalData = { 
         fileName: file.name, 
         uploadId: uploadId,
-        totalChunks: totalChunks.toString() 
+        totalChunks: totalChunks.toString(),
+        // Include metadata in finalization request (like frontend v2)
+        title: uploadMetadata.title || 'Untitled Video',
+        description: uploadMetadata.description || '',
+        tags: uploadMetadata.tags ? (Array.isArray(uploadMetadata.tags) ? uploadMetadata.tags.join(',') : uploadMetadata.tags) : ''
       };
       forceLog('Finalize request data:', finalData);
       
-      const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/finalize`, {
+      // Use new SDK v2 finalize route
+      const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/finalize-v2`, {
         method: 'POST',
         body: JSON.stringify(finalData),
         headers: {
@@ -108,7 +124,8 @@ export default class VideonestClient {
         fileSize: file.size,
         chunksCount: totalChunks,
         startTime,
-        status: 'completed'
+        status: 'completed',
+        uploadId: uploadId
       });
       
       return finalizeResult;
@@ -124,7 +141,8 @@ export default class VideonestClient {
         fileSize: file.size,
         chunksCount: 0,
         startTime,
-        status: 'failed'
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
       
       return { 
@@ -133,7 +151,6 @@ export default class VideonestClient {
       };
     }
   }
-
 
   private async trackVideoUpload(action: string, sessionData: any) {
     log("Tracking video upload:", action, sessionData);
