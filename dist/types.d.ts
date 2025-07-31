@@ -13,8 +13,7 @@ export interface UploadOptions {
     chunkSize?: number;
     onProgress?: (progress: number) => void;
     metadata: VideoMetadata;
-    thumbnail?: File;
-    autoGenerateThumbnail?: boolean;
+    thumbnail: File;
 }
 export interface VideoStatus {
     success: boolean;

@@ -12,9 +12,6 @@ export default class VideonestClient {
   }
   
   async uploadVideo(file: File, options: UploadOptions): Promise<UploadResult> {
-    const sessionId = generateUUID();
-    const startTime = Date.now();
-    
     forceLog('Starting optimized video upload process');
     forceLog(`File: ${file.name}, size: ${file.size} bytes`);
     
@@ -43,39 +40,17 @@ export default class VideonestClient {
       };
       forceLog('Upload metadata:', uploadMetadata);
       
-      // Get estimated chunk count before starting
+      // Create upload optimization manager
       const uploadManager = new UploadOptimizationManager(
         file, 
         uploadMetadata, 
         this.config
       );
-      const estimatedChunks = uploadManager.getTotalChunks();
-      
-      // Track upload start with estimated chunk count
-      await this.trackVideoUpload('start', {
-        sessionId,
-        userId: 'SDK',
-        filename: file.name,
-        fileSize: file.size,
-        chunksCount: estimatedChunks,
-        startTime,
-        status: 'in_progress'
-      });
       
       // Upload chunks with optimization
       const { uploadId, totalChunks } = await uploadManager.upload(onProgress);
       
       forceLog(`All chunks uploaded. Finalizing upload... (uploadId: ${uploadId}, totalChunks: ${totalChunks})`);
-      
-      // Update session with actual chunk count if different
-      if (totalChunks !== estimatedChunks) {
-        await this.trackVideoUpload('chunks_complete', {
-          sessionId,
-          userId: 'SDK',
-          chunksCount: totalChunks,
-          status: 'chunks_completed'
-        });
-      }
       
       // Finalize using v2 route with metadata in request body
       const finalData = { 
@@ -115,35 +90,9 @@ export default class VideonestClient {
       await this.uploadThumbnail(thumbnail, finalizeResult.video.id);
       forceLog('Upload process completed successfully');
       
-      // Track successful completion
-      await this.trackVideoUpload('complete', {
-        sessionId,
-        userId: 'SDK',
-        videoId: finalizeResult.video?.id || 0,
-        filename: file.name,
-        fileSize: file.size,
-        chunksCount: totalChunks,
-        startTime,
-        status: 'completed',
-        uploadId: uploadId
-      });
-      
       return finalizeResult;
     } catch (error) {
       forceLog(`Upload error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
-      
-      // Track failed upload
-      await this.trackVideoUpload('failed', {
-        sessionId,
-        userId: 'SDK',
-        videoId: 0,
-        filename: file.name,
-        fileSize: file.size,
-        chunksCount: 0,
-        startTime,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
       
       return { 
         success: false, 
