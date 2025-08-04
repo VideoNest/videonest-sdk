@@ -22,8 +22,6 @@ export function setDebugMode(enable: boolean): void {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('debug', 'videonest-sdk');
     }
-    
-    console.log('[videonest-sdk] Debug mode enabled');
   } else {
     // Disable debug module
     debugModule.disable();
