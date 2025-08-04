@@ -15,7 +15,7 @@ export interface VideonestConfig {
   
   export interface UploadOptions {
     chunkSize?: number; // Size in bytes, default to 2MB
-    onProgress?: (progress: number) => void;
+    onProgress?: (progress: number, status: 'uploading' | 'finalizing' | 'failed') => void;
     metadata: VideoMetadata;
     thumbnail: File; // Required: thumbnail must be provided by user
   }

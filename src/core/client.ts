@@ -15,16 +15,32 @@ export default class VideonestClient {
     forceLog('Starting optimized video upload process');
     forceLog(`File: ${file.name}, size: ${file.size} bytes`);
     
+    // Generate a unique session ID for tracking
+    const sessionId = generateUUID();
+    const startTime = Date.now();
+    
     try {
       const { 
         metadata, 
-        onProgress = () => {}, 
+        onProgress = (_progress: number, _status: 'uploading' | 'finalizing' | 'failed' | 'stalled') => {}, 
         thumbnail
       } = options;
       
       // Check if thumbnail is provided
       if (!thumbnail) {
         forceLog('Error: Thumbnail is required');
+        onProgress(0, 'failed');
+        
+        // Track failed upload (missing thumbnail)
+        await this.trackVideoUpload('failed', {
+          sessionId,
+          startTime,
+          status: 'failed',
+          filename: file.name,
+          fileSize: file.size,
+          chunksCount: 0,
+        });
+        
         throw new Error('Thumbnail is required for video upload');
       }
       
@@ -37,6 +53,17 @@ export default class VideonestClient {
       const uploadMetadata = {...metadata, channelId: this.config.channelId};
       forceLog('Upload metadata:', uploadMetadata);
       
+      // Start tracking upload session
+      await this.trackVideoUpload('start', {
+        sessionId,
+        startTime,
+        userId: 'sdk-user', // Use generic user ID for SDK uploads
+        filename: file.name,
+        fileSize: file.size,
+        chunksCount: Math.ceil(file.size / (options.chunkSize || 2 * 1024 * 1024)),
+        status: 'in_progress'
+      });
+      
       // Create upload optimization manager
       const uploadManager = new UploadOptimizationManager(
         file, 
@@ -47,14 +74,15 @@ export default class VideonestClient {
       // Upload chunks with optimization
       const { uploadId, totalChunks } = await uploadManager.upload(onProgress);
       
-      forceLog(`All chunks uploaded. Finalizing upload... (uploadId: ${uploadId}, totalChunks: ${totalChunks})`);
+      // Set status to finalizing once chunks are done
+      onProgress(100, 'finalizing');
       
-      // Finalize using v2 route with metadata in request body
+      forceLog(`All chunks uploaded. Finalizing upload... (uploadId: ${uploadId}, totalChunks: ${totalChunks})`);
+
       const finalData = { 
         fileName: file.name, 
         uploadId: uploadId,
         totalChunks: totalChunks.toString(),
-        // Include metadata in finalization request (like frontend v2)
         title: uploadMetadata.title || 'Untitled Video',
         description: uploadMetadata.description || '',
         tags: uploadMetadata.tags ? (Array.isArray(uploadMetadata.tags) ? uploadMetadata.tags.join(',') : uploadMetadata.tags) : ''
@@ -77,10 +105,34 @@ export default class VideonestClient {
       
       if (!finalizeResult.success) {
         forceLog(`Finalization failed: ${finalizeResult.message}`);
+        onProgress(100, 'failed');
+        
+        // Track failed upload (finalization failed)
+        await this.trackVideoUpload('failed', {
+          sessionId,
+          startTime,
+          status: 'failed',
+          filename: file.name,
+          fileSize: file.size,
+          chunksCount: totalChunks,
+          videoId: finalizeResult.video?.id || 0
+        });
+        
         throw new Error(finalizeResult.message || 'Upload finalization failed');
       }
       
       forceLog('Upload successfully finalized');
+      
+      // Track successful upload completion before thumbnail upload
+      await this.trackVideoUpload('complete', {
+        sessionId,
+        startTime,
+        status: 'complete',
+        filename: file.name,
+        fileSize: file.size,
+        chunksCount: totalChunks,
+        videoId: finalizeResult.video.id
+      });
       
       // Upload the provided thumbnail
       forceLog('Uploading user-provided thumbnail');
@@ -90,6 +142,14 @@ export default class VideonestClient {
       return finalizeResult;
     } catch (error) {
       forceLog(`Upload error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
+      options.onProgress?.(0, 'failed');
+      await this.trackVideoUpload('failed', {
+        sessionId,
+        startTime,
+        status: 'failed',
+        filename: file.name,
+        fileSize: file.size
+      });
       
       return { 
         success: false, 
@@ -119,7 +179,6 @@ export default class VideonestClient {
           file_size: sessionData.fileSize,
           chunks_count: sessionData.chunksCount || 0,
           status: 'in_progress'
-          // start_time will default to NOW() in the API
         };
       } else if (action === 'complete' || action === 'failed') {
         // UPDATE existing session
@@ -130,12 +189,9 @@ export default class VideonestClient {
           end_time: new Date().toISOString(),
           status: sessionData.status
         };
-        
         if (sessionData.startTime) {
           const duration = Date.now() - sessionData.startTime;
           requestBody.total_duration = `${Math.floor(duration / 1000)} seconds`;
-          
-          // Calculate average speed in Mbps
           if (sessionData.fileSize && duration > 0) {
             const speedBps = (sessionData.fileSize * 8) / (duration / 1000); // bits per second
             requestBody.avg_speed_mbps = parseFloat((speedBps / 1_000_000).toFixed(2)); // Convert to Mbps
@@ -144,33 +200,14 @@ export default class VideonestClient {
       }
   
       const url = `${baseUrl}${endpoint}`;
-      log("Upload session request:", { action, url, method, body: requestBody });
-  
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      // Add authentication headers
-      if (this.config.apiKey) {
-        headers['X-API-Key'] = this.config.apiKey;
-      }
-
-      if (this.config.channelId) {
-        headers['X-Channel-ID'] = this.config.channelId.toString();
-      }
-  
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: JSON.stringify(requestBody),
-      });
+      const headers: Record<string, string> = {'Content-Type': 'application/json'};
+      const response = await fetch(url, {method, headers, body: JSON.stringify(requestBody)});
   
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         log('Failed to track upload session:', errorData);
         return { success: false, error: 'Failed to track upload session' };
       }
-  
       const data = await response.json();
       return { success: true, ...data };
     } catch (error) {
@@ -227,8 +264,6 @@ export default class VideonestClient {
       throw new Error(error instanceof Error ? error.message : 'Failed to get video status');
     }
   }
-
-
 
 
 

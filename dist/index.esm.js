@@ -65,38 +65,18 @@ function generateUUID() {
 }
 
 // uploadOptimizationManager.ts - SDK v2 Upgrade
-function calculateOptimalChunkSize(fileSize, connectionSpeed = null, totalConcurrentUploads = 1) {
+function calculateOptimalChunkSize(fileSize) {
     let baseChunkSize;
-    // AGGRESSIVE base sizes for single SDK uploads (larger than frontend)
-    if (fileSize < 50 * 1024 * 1024) { // < 50MB
-        baseChunkSize = 8 * 1024 * 1024; // 8MB (vs 2MB frontend)
-    }
-    else if (fileSize < 500 * 1024 * 1024) { // < 500MB  
-        baseChunkSize = 25 * 1024 * 1024; // 25MB (vs 5MB frontend)
-    }
-    else if (fileSize < 2 * 1024 * 1024 * 1024) { // < 2GB
-        baseChunkSize = 50 * 1024 * 1024; // 50MB (vs 10MB frontend)
-    }
-    else {
-        baseChunkSize = 100 * 1024 * 1024; // 100MB (vs 20MB frontend)
-    }
-    // SDK is always single video, so no reduction needed like frontend
-    // But still respect connection speed
-    if (connectionSpeed) {
-        if (connectionSpeed > 50) { // > 50 Mbps - blazing fast
-            baseChunkSize = Math.min(baseChunkSize * 2, 200 * 1024 * 1024); // Up to 200MB!
-        }
-        else if (connectionSpeed > 25) { // > 25 Mbps - fast connection  
-            baseChunkSize = Math.min(baseChunkSize * 1.5, 100 * 1024 * 1024);
-        }
-        else if (connectionSpeed > 10) ;
-        else if (connectionSpeed < 5) { // < 5 Mbps - slow connection  
-            baseChunkSize = Math.max(baseChunkSize * 0.5, 1024 * 1024); // Min 1MB
-        }
-    }
+    if (fileSize < 50 * 1024 * 1024)
+        baseChunkSize = 8 * 1024 * 1024; // < 50MB: 8MB
+    else if (fileSize < 500 * 1024 * 1024)
+        baseChunkSize = 25 * 1024 * 1024; // < 500MB: 25MB
+    else if (fileSize < 2 * 1024 * 1024 * 1024)
+        baseChunkSize = 50 * 1024 * 1024; // < 2GB: 50MB
+    else
+        baseChunkSize = 100 * 1024 * 1024; // 100MB
     return Math.floor(baseChunkSize);
 }
-// Enhanced connection speed detector from frontend v2
 class ConnectionSpeedDetector {
     constructor() {
         this.samples = [];
@@ -106,10 +86,8 @@ class ConnectionSpeedDetector {
     recordChunkUpload(chunkSize, uploadTime) {
         const speedMbps = (chunkSize * 8) / (uploadTime / 1000) / 1000000;
         this.samples.push(speedMbps);
-        if (this.samples.length > 5) { // Keep more samples for stability
-            this.samples.shift();
-        }
-        // Calculate weighted average (more weight to recent samples)
+        if (this.samples.length > 5)
+            this.samples.shift(); // Keep more samples for stability
         this.avgSpeed = this.calculateWeightedAverage(this.samples);
         this.globalThroughput = this.samples.reduce((a, b) => a + b, 0);
         return this.avgSpeed;
@@ -125,12 +103,6 @@ class ConnectionSpeedDetector {
             totalWeight += weight;
         });
         return weightedSum / totalWeight;
-    }
-    shouldReduceConcurrency() {
-        return this.avgSpeed !== null && (this.avgSpeed < 5 || this.globalThroughput < 10);
-    }
-    shouldIncreaseConcurrency() {
-        return this.avgSpeed !== null && this.avgSpeed > 20 && this.globalThroughput > 50 && this.samples.length >= 3;
     }
 }
 class UploadOptimizationManager {
@@ -150,22 +122,17 @@ class UploadOptimizationManager {
         this.file = file;
         this.metadata = metadata;
         this.config = config;
-        // More aggressive for single SDK uploads
-        this.maxConcurrency = 10; // Higher than frontend's max of 6
-        this.currentConcurrency = 4; // Start higher than frontend's 2
-        // Calculate chunk size with SDK-optimized settings
-        this.chunkSize = calculateOptimalChunkSize(file.size, null, 1);
+        this.chunkSize = calculateOptimalChunkSize(file.size);
         this.totalChunks = Math.ceil(file.size / this.chunkSize);
-        console.log(`🚀 SDK Upload manager initialized: ${this.totalChunks} chunks, ${this.maxConcurrency} max concurrency, ${(this.chunkSize / 1024 / 1024).toFixed(1)}MB chunk size`);
+        console.log(`🚀 SDK Upload manager initialized: ${this.totalChunks} chunks, ${UploadOptimizationManager.CONCURRENCY} concurrency, ${(this.chunkSize / 1024 / 1024).toFixed(1)}MB chunk size`);
     }
     async upload(onProgress) {
         const uploadId = generateUUID();
         this.uploadId = uploadId;
         this.startTime = Date.now();
         // Initialize bytes tracking for each chunk
-        for (let i = 0; i < this.totalChunks; i++) {
+        for (let i = 0; i < this.totalChunks; i++)
             this.chunkBytesUploaded.set(i, 0);
-        }
         // Create upload queue with priority (first and last chunks prioritized)
         for (let i = 0; i < this.totalChunks; i++) {
             this.uploadQueue.push({
@@ -176,19 +143,16 @@ class UploadOptimizationManager {
                 priority: this.calculateChunkPriority(i)
             });
         }
-        // Sort queue by priority
-        this.uploadQueue.sort((a, b) => b.priority - a.priority);
-        // Start workers
+        this.uploadQueue.sort((a, b) => b.priority - a.priority); // Sort queue by priority
+        // Start workers with fixed concurrency
         const workerPromises = [];
-        for (let i = 0; i < this.currentConcurrency; i++) {
+        for (let i = 0; i < UploadOptimizationManager.CONCURRENCY; i++) {
             workerPromises.push(this.uploadWorker(onProgress));
         }
-        // Monitor for stalled uploads
-        this.stallMonitor = setInterval(() => this.checkForStalledUploads(), 10000);
+        this.stallMonitor = setInterval(() => this.checkForStalledUploads(), 10000); // Monitor for stalled uploads
         await Promise.all(workerPromises);
-        if (this.stallMonitor) {
+        if (this.stallMonitor)
             clearInterval(this.stallMonitor);
-        }
         if (this.failedChunks.size > 0) {
             throw new Error(`Failed to upload ${this.failedChunks.size} chunks after retries`);
         }
@@ -196,19 +160,15 @@ class UploadOptimizationManager {
         return { uploadId, totalChunks: this.totalChunks };
     }
     calculateChunkPriority(index) {
-        // First chunk gets highest priority (contains metadata)
         if (index === 0)
-            return 100;
-        // Last chunk gets high priority (allows early finalization check)
+            return 100; // First chunk gets highest priority (contains metadata)
         if (index === this.totalChunks - 1)
-            return 90;
-        // Middle chunks get normal priority
-        return 50;
+            return 90; // Last chunk gets high priority (allows early finalization check)
+        return 50; // Middle chunks get normal priority
     }
     async uploadWorker(onProgress) {
         while (this.uploadQueue.length > 0 || this.activeUploads.size > 0) {
-            // Check if we should process more uploads
-            if (this.uploadQueue.length > 0 && this.activeUploads.size < this.currentConcurrency) {
+            if (this.uploadQueue.length > 0 && this.activeUploads.size < UploadOptimizationManager.CONCURRENCY) {
                 const chunkInfo = this.uploadQueue.shift();
                 if (chunkInfo) {
                     try {
@@ -220,8 +180,7 @@ class UploadOptimizationManager {
                 }
             }
             else {
-                // Wait for active uploads to complete
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 100)); // Wait for active uploads to complete
             }
         }
     }
@@ -231,9 +190,8 @@ class UploadOptimizationManager {
         const end = Math.min(start + this.chunkSize, this.file.size);
         const chunk = this.file.slice(start, end);
         const chunkSize = chunk.size;
-        if (chunkSize === 0) {
+        if (chunkSize === 0)
             throw new Error(`Empty chunk detected for index ${index}`);
-        }
         this.activeUploads.set(index, { ...chunkInfo, startTime: Date.now() });
         const formData = new FormData();
         formData.append('chunk', chunk);
@@ -254,33 +212,29 @@ class UploadOptimizationManager {
                 const tagsValue = Array.isArray(this.metadata.tags)
                     ? this.metadata.tags.join(',')
                     : this.metadata.tags;
-                if (tagsValue && tagsValue.length > 0) {
+                if (tagsValue && tagsValue.length > 0)
                     formData.append('tags', tagsValue);
-                }
             }
         }
         const startTime = Date.now();
         const baseUrl = this.config.baseUrl || 'https://api1.videonest.co';
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
-            // Increased timeout for larger chunks
-            xhr.timeout = 120000; // 2 minutes
+            xhr.timeout = 120000; // 2 minutes - Increased timeout for larger chunks
             xhr.upload.onprogress = (event) => {
                 if (event.lengthComputable) {
                     this.chunkBytesUploaded.set(index, event.loaded);
                     this.totalBytesUploaded = Array.from(this.chunkBytesUploaded.values())
                         .reduce((sum, bytes) => sum + bytes, 0);
-                    // Throttle progress updates
                     const now = Date.now();
-                    if (now - this.lastProgressReport > 100) {
+                    if (now - this.lastProgressReport > 100) { // Throttle progress updates
                         const progressPercentage = (this.totalBytesUploaded / this.file.size) * 100;
                         onProgress(progressPercentage);
                         this.lastProgressReport = now;
                     }
                 }
             };
-            // Use v2 route like frontend
-            xhr.open('POST', `${baseUrl}/sdk/${this.config.channelId}/upload-chunk-v2`);
+            xhr.open('POST', `${baseUrl}/sdk/${this.config.channelId}/upload-chunk-v2`); // Use v2 route like frontend
             xhr.setRequestHeader('Authorization', `Bearer ${this.config.apiKey}`);
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
@@ -295,10 +249,6 @@ class UploadOptimizationManager {
                             this.activeUploads.delete(index);
                             this.completedChunks.add(index);
                             this.chunkBytesUploaded.set(index, chunkSize);
-                            // Dynamic concurrency adjustment
-                            if (this.completedChunks.size % 3 === 0) {
-                                this.adjustConcurrency(currentSpeed);
-                            }
                             resolve(result);
                         }
                     }
@@ -319,40 +269,13 @@ class UploadOptimizationManager {
         console.error(`Chunk ${chunkInfo.index} upload failed:`, error.message);
         if (chunkInfo.retries < chunkInfo.maxRetries) {
             chunkInfo.retries++;
-            // Add delay before retry with exponential backoff
             setTimeout(() => {
                 this.uploadQueue.unshift(chunkInfo); // Add to front for priority
-            }, Math.pow(2, chunkInfo.retries) * 1000);
+            }, Math.pow(2, chunkInfo.retries) * 1000); // Add delay before retry with exponential backoff
         }
         else {
             this.failedChunks.add(chunkInfo.index);
             this.activeUploads.delete(chunkInfo.index);
-        }
-    }
-    adjustConcurrency(currentSpeed) {
-        const oldConcurrency = this.currentConcurrency;
-        // More aggressive adjustments for single file SDK uploads
-        if (this.speedDetector.shouldReduceConcurrency()) {
-            this.currentConcurrency = Math.max(1, this.currentConcurrency - 1);
-            console.log(`🐌 SDK: Reducing concurrency to ${this.currentConcurrency} (${currentSpeed.toFixed(1)} Mbps)`);
-        }
-        else if (this.speedDetector.shouldIncreaseConcurrency() && this.currentConcurrency < this.maxConcurrency) {
-            // More aggressive increases for SDK
-            if (currentSpeed > 50) {
-                this.currentConcurrency = Math.min(this.currentConcurrency + 2, this.maxConcurrency);
-                console.log(`🚀 SDK: Boosting concurrency to ${this.currentConcurrency} (${currentSpeed.toFixed(1)} Mbps)`);
-            }
-            else if (currentSpeed > 25) {
-                this.currentConcurrency = Math.min(this.currentConcurrency + 1, this.maxConcurrency);
-                console.log(`⚡ SDK: Increasing concurrency to ${this.currentConcurrency} (${currentSpeed.toFixed(1)} Mbps)`);
-            }
-        }
-        // Start additional workers if concurrency increased
-        if (this.currentConcurrency > oldConcurrency && this.uploadQueue.length > 0) {
-            const additionalWorkers = this.currentConcurrency - oldConcurrency;
-            for (let i = 0; i < additionalWorkers; i++) {
-                this.uploadWorker(() => { }); // Start worker without progress callback
-            }
         }
     }
     checkForStalledUploads() {
@@ -362,8 +285,7 @@ class UploadOptimizationManager {
             if (now - uploadInfo.startTime > stallThreshold) {
                 console.warn(`⚠️ SDK: Chunk ${index} appears stalled, will retry`);
                 this.stalledChunks.add(index);
-                // Cancel and retry stalled upload
-                this.activeUploads.delete(index);
+                this.activeUploads.delete(index); // Cancel and retry stalled upload
                 this.uploadQueue.unshift({
                     ...uploadInfo,
                     retries: uploadInfo.retries + 1
@@ -377,12 +299,13 @@ class UploadOptimizationManager {
             completedChunks: this.completedChunks.size,
             failedChunks: this.failedChunks.size,
             activeUploads: this.activeUploads.size,
-            currentConcurrency: this.currentConcurrency,
+            concurrency: UploadOptimizationManager.CONCURRENCY,
             avgSpeed: this.speedDetector.avgSpeed,
             progress: (this.totalBytesUploaded / this.file.size) * 100
         };
     }
 }
+UploadOptimizationManager.CONCURRENCY = 6; // Fixed concurrency
 
 class VideonestClient {
     constructor(config) {
@@ -404,10 +327,7 @@ class VideonestClient {
                 hasThumbnail: !!thumbnail
             });
             // Make sure channelId is included in metadata
-            const uploadMetadata = {
-                ...metadata,
-                channelId: this.config.channelId,
-            };
+            const uploadMetadata = { ...metadata, channelId: this.config.channelId };
             forceLog('Upload metadata:', uploadMetadata);
             // Create upload optimization manager
             const uploadManager = new UploadOptimizationManager(file, uploadMetadata, this.config);

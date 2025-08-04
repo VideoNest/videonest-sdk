@@ -1,20 +1,17 @@
 import { VideonestConfig, VideoMetadata } from '../types';
-export declare function calculateOptimalChunkSize(fileSize: number, connectionSpeed?: number | null, totalConcurrentUploads?: number): number;
+export declare function calculateOptimalChunkSize(fileSize: number): number;
 export declare class ConnectionSpeedDetector {
     private samples;
     avgSpeed: number | null;
     private globalThroughput;
     recordChunkUpload(chunkSize: number, uploadTime: number): number;
     private calculateWeightedAverage;
-    shouldReduceConcurrency(): boolean;
-    shouldIncreaseConcurrency(): boolean;
 }
 export declare class UploadOptimizationManager {
     private file;
     private metadata;
     private config;
-    private currentConcurrency;
-    private maxConcurrency;
+    private static readonly CONCURRENCY;
     private uploadQueue;
     private activeUploads;
     private completedChunks;
@@ -38,14 +35,13 @@ export declare class UploadOptimizationManager {
     private uploadWorker;
     private uploadChunk;
     private handleChunkError;
-    private adjustConcurrency;
     private checkForStalledUploads;
     getUploadStats(): {
         totalChunks: number;
         completedChunks: number;
         failedChunks: number;
         activeUploads: number;
-        currentConcurrency: number;
+        concurrency: number;
         avgSpeed: number | null;
         progress: number;
     };
