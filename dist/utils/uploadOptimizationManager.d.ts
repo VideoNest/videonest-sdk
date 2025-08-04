@@ -36,8 +36,9 @@ export declare class UploadOptimizationManager {
         completedChunks: number;
         failedChunks: number;
         activeUploads: number;
-        concurrency: number;
-        avgSpeed: number | null;
-        progress: number;
+        chunkSize: number;
+        totalSize: number;
+        averageSpeed: number | null;
     };
+    getTotalChunks(): number;
 }

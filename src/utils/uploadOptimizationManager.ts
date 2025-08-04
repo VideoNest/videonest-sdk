@@ -191,9 +191,13 @@ export class UploadOptimizationManager {
       completedChunks: this.completedChunks.size,
       failedChunks: this.failedChunks.size,
       activeUploads: this.activeUploads.size,
-      concurrency: UploadOptimizationManager.CONCURRENCY,
-      avgSpeed: this.speedDetector.avgSpeed,
-      progress: (this.totalBytesUploaded / this.file.size) * 100
+      chunkSize: this.chunkSize,
+      totalSize: this.file.size,
+      averageSpeed: this.speedDetector.avgSpeed
     };
+  }
+  
+  getTotalChunks(): number {
+    return this.totalChunks;
   }
 }

@@ -53,23 +53,26 @@ export default class VideonestClient {
       const uploadMetadata = {...metadata, channelId: this.config.channelId};
       forceLog('Upload metadata:', uploadMetadata);
       
-      // Start tracking upload session
-      await this.trackVideoUpload('start', {
-        sessionId,
-        startTime,
-        userId: 'sdk-user', // Use generic user ID for SDK uploads
-        filename: file.name,
-        fileSize: file.size,
-        chunksCount: Math.ceil(file.size / (options.chunkSize || 2 * 1024 * 1024)),
-        status: 'in_progress'
-      });
-      
       // Create upload optimization manager
       const uploadManager = new UploadOptimizationManager(
         file, 
         uploadMetadata, 
         this.config
       );
+      
+      // Get actual number of chunks based on optimal chunk size calculation
+      const actualChunks = uploadManager.getTotalChunks();
+      
+      // Start tracking upload session with actual chunk count
+      await this.trackVideoUpload('start', {
+        sessionId,
+        startTime,
+        userId: 'sdk-user', // Use generic user ID for SDK uploads
+        filename: file.name,
+        fileSize: file.size,
+        chunksCount: actualChunks, // Use actual calculated chunks, not default 2MB chunks
+        status: 'in_progress'
+      });
       
       // Upload chunks with optimization
       const { uploadId, totalChunks } = await uploadManager.upload(onProgress);

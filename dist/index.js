@@ -46,7 +46,6 @@ function setDebugMode(enable) {
         if (typeof window !== 'undefined') {
             window.localStorage.setItem('debug', 'videonest-sdk');
         }
-        console.log('[videonest-sdk] Debug mode enabled');
     }
     else {
         // Disable debug module
@@ -268,10 +267,13 @@ class UploadOptimizationManager {
             completedChunks: this.completedChunks.size,
             failedChunks: this.failedChunks.size,
             activeUploads: this.activeUploads.size,
-            concurrency: UploadOptimizationManager.CONCURRENCY,
-            avgSpeed: this.speedDetector.avgSpeed,
-            progress: (this.totalBytesUploaded / this.file.size) * 100
+            chunkSize: this.chunkSize,
+            totalSize: this.file.size,
+            averageSpeed: this.speedDetector.avgSpeed
         };
+    }
+    getTotalChunks() {
+        return this.totalChunks;
     }
 }
 UploadOptimizationManager.CONCURRENCY = 6;
@@ -312,18 +314,20 @@ class VideonestClient {
             // Make sure channelId is included in metadata
             const uploadMetadata = { ...metadata, channelId: this.config.channelId };
             forceLog('Upload metadata:', uploadMetadata);
-            // Start tracking upload session
+            // Create upload optimization manager
+            const uploadManager = new UploadOptimizationManager(file, uploadMetadata, this.config);
+            // Get actual number of chunks based on optimal chunk size calculation
+            const actualChunks = uploadManager.getTotalChunks();
+            // Start tracking upload session with actual chunk count
             await this.trackVideoUpload('start', {
                 sessionId,
                 startTime,
                 userId: 'sdk-user', // Use generic user ID for SDK uploads
                 filename: file.name,
                 fileSize: file.size,
-                chunksCount: Math.ceil(file.size / (options.chunkSize || 2 * 1024 * 1024)),
+                chunksCount: actualChunks, // Use actual calculated chunks, not default 2MB chunks
                 status: 'in_progress'
             });
-            // Create upload optimization manager
-            const uploadManager = new UploadOptimizationManager(file, uploadMetadata, this.config);
             // Upload chunks with optimization
             const { uploadId, totalChunks } = await uploadManager.upload(onProgress);
             // Set status to finalizing once chunks are done
