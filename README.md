@@ -147,7 +147,39 @@ The VideoNest SDK includes intelligent chunked uploading with network-based opti
 
 - **Automatic Retry**: Failed chunks are automatically retried with exponential backoff
 
-- **Progress Tracking**: Detailed progress reporting via the onProgress callback
+- **Status-Based Progress Tracking**: Detailed progress reporting via the onProgress callback that provides both percentage and status:
+
+```typescript
+onProgress?: (progress: number, status: 'uploading' | 'finalizing' | 'failed') => void;
+```
+
+  The callback provides:
+  - `progress`: A number from 0 to 100 indicating upload completion percentage
+  - `status`: Current upload state
+    - `'uploading'`: Actively uploading chunks (progress from 0% to 99%)
+    - `'finalizing'`: Chunks uploaded, server processing (progress=100%)
+    - `'failed'`: Upload encountered an error (progress=0)
+
+  Example usage:
+  ```javascript
+  uploadVideo(videoFile, {
+    metadata: { title: 'My Video', channelId: 12345 },
+    thumbnail: thumbnailFile,
+    onProgress: (progress, status) => {
+      console.log(`Upload ${status}: ${Math.round(progress)}%`);
+      
+      // Update UI based on status
+      if (status === 'uploading') {
+        progressBar.setValue(progress);
+        statusText.setText('Uploading...');
+      } else if (status === 'finalizing') {
+        statusText.setText('Processing video...');
+      } else if (status === 'failed') {
+        statusText.setText('Upload failed');
+      }
+    }
+  });
+  ```
 
 ### Get Video Status
 
