@@ -11,7 +11,7 @@ export interface VideoMetadata {
 }
 export interface UploadOptions {
     chunkSize?: number;
-    onProgress?: (progress: number) => void;
+    onProgress?: (progress: number, status: 'uploading' | 'finalizing' | 'failed') => void;
     metadata: VideoMetadata;
     thumbnail: File;
 }

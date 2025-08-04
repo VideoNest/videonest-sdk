@@ -3,7 +3,6 @@ export declare function calculateOptimalChunkSize(fileSize: number): number;
 export declare class ConnectionSpeedDetector {
     private samples;
     avgSpeed: number | null;
-    private globalThroughput;
     recordChunkUpload(chunkSize: number, uploadTime: number): number;
     private calculateWeightedAverage;
 }
@@ -24,18 +23,14 @@ export declare class UploadOptimizationManager {
     private totalBytesUploaded;
     private startTime;
     private lastProgressReport;
-    private stalledChunks;
-    private stallMonitor?;
     constructor(file: File, metadata: VideoMetadata, config: VideonestConfig);
-    upload(onProgress: (progress: number) => void): Promise<{
+    upload(onProgress: (progress: number, status: 'uploading' | 'finalizing' | 'failed') => void): Promise<{
         uploadId: string;
         totalChunks: number;
     }>;
-    private calculateChunkPriority;
     private uploadWorker;
     private uploadChunk;
     private handleChunkError;
-    private checkForStalledUploads;
     getUploadStats(): {
         totalChunks: number;
         completedChunks: number;
