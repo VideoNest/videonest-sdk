@@ -34,10 +34,7 @@ export default class VideonestClient {
       });
       
       // Make sure channelId is included in metadata
-      const uploadMetadata = {
-        ...metadata,
-        channelId: this.config.channelId,
-      };
+      const uploadMetadata = {...metadata, channelId: this.config.channelId};
       forceLog('Upload metadata:', uploadMetadata);
       
       // Create upload optimization manager
