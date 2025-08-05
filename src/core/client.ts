@@ -161,6 +161,7 @@ export default class VideonestClient {
     }
   }
 
+  // correct endpoint 
   private async trackVideoUpload(action: string, sessionData: any) {
     log("Tracking video upload:", action, sessionData);
     
