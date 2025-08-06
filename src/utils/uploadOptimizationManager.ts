@@ -40,7 +40,7 @@ export class UploadOptimizationManager {
   private file: File;
   private metadata: VideoMetadata;
   private config: VideonestConfig;
-  private static readonly CONCURRENCY = 6;
+  private static readonly CONCURRENCY = 5;
   
   private uploadQueue: Array<{index: number; uploadId: string; retries: number; maxRetries: number}> = [];
   private activeUploads = new Map();
@@ -126,7 +126,7 @@ export class UploadOptimizationManager {
     
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.timeout = 120000;
+      xhr.timeout = 600000;
       
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {

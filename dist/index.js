@@ -204,7 +204,7 @@ class UploadOptimizationManager {
         const baseUrl = this.config.baseUrl || 'https://api1.videonest.co';
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
-            xhr.timeout = 120000;
+            xhr.timeout = 600000;
             xhr.upload.onprogress = (event) => {
                 if (event.lengthComputable) {
                     this.chunkBytesUploaded.set(index, event.loaded);
@@ -276,7 +276,7 @@ class UploadOptimizationManager {
         return this.totalChunks;
     }
 }
-UploadOptimizationManager.CONCURRENCY = 6;
+UploadOptimizationManager.CONCURRENCY = 5;
 
 class VideonestClient {
     constructor(config) {
