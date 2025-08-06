@@ -15,6 +15,7 @@ export { VideonestPreview }; // Export the component
  * @param options Upload options including metadata
  * @param config VideoNest configuration with channelId and apiKey
  */
+// Minor
 export async function uploadVideo(file: File, options: any, config: VideonestConfig) {
   const client = new VideonestClient(config);
   return client.uploadVideo(file, options);
