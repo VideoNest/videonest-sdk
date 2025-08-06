@@ -375,6 +375,7 @@ class VideonestClient {
             };
         }
     }
+    // correct endpoint 
     async trackVideoUpload(action, sessionData) {
         log("Tracking video upload:", action, sessionData);
         try {
@@ -523,12 +524,37 @@ const VideonestEmbed = ({ videoId, config, style = {} }) => {
     return (React.createElement("iframe", { src: embedUrl, style: { width: width || '100%', height: height || '100%' }, frameBorder: "0", allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture", allowFullScreen: true, title: `Videonest video ${videoId}` }));
 };
 
+const VideonestPreview = ({ videoId, config, style = {} }) => {
+    const { primaryColor, secondaryColor, darkMode, width, height, showTitle, showDescription } = style;
+    let embedUrl = `https://app.videonest.co/embed/preview/${videoId}`;
+    const params = [];
+    if (primaryColor)
+        params.push(`primary_color=${primaryColor.replace('#', '')}`);
+    if (secondaryColor)
+        params.push(`secondary_color=${secondaryColor.replace('#', '')}`);
+    if (darkMode)
+        params.push('dark_mode=true');
+    if (showTitle)
+        params.push('show_title=true');
+    if (showDescription)
+        params.push('show_description=true');
+    // Add authentication parameters
+    // new version
+    params.push(`channel_id=${config.channelId}`);
+    params.push(`api_key=${config.apiKey}`);
+    if (params.length > 0) {
+        embedUrl += `?${params.join('&')}`;
+    }
+    return (React.createElement("iframe", { src: embedUrl, style: { width: width || '100%', height: height || '100%' }, frameBorder: "0", allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture", allowFullScreen: true, title: `Videonest video ${videoId}` }));
+};
+
 /**
  * Upload a video to VideoNest
  * @param file The video file to upload
  * @param options Upload options including metadata
  * @param config VideoNest configuration with channelId and apiKey
  */
+// Minor
 async function uploadVideo(file, options, config) {
     const client = new VideonestClient(config);
     return client.uploadVideo(file, options);
@@ -551,5 +577,5 @@ async function listVideos(config) {
     return client.listVideos();
 }
 
-export { VideonestEmbed, getVideoStatus, isDebugModeEnabled, listVideos, setDebugMode, uploadVideo };
+export { VideonestEmbed, VideonestPreview, getVideoStatus, isDebugModeEnabled, listVideos, setDebugMode, uploadVideo };
 //# sourceMappingURL=index.esm.js.map

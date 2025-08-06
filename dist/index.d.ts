@@ -1,8 +1,10 @@
 import { VideonestConfig } from './types';
 import VideonestEmbed from './components/VideonestEmbed';
+import VideonestPreview from './components/VideonestPreview';
 export * from './types';
 export { setDebugMode, isDebugModeEnabled } from './utils/debug';
 export { VideonestEmbed };
+export { VideonestPreview };
 /**
  * Upload a video to VideoNest
  * @param file The video file to upload
