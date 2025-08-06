@@ -126,7 +126,7 @@ export class UploadOptimizationManager {
     
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.timeout = 600000;
+      xhr.timeout = 1800000;
       
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
