@@ -29,6 +29,7 @@ const VideonestPreview: React.FC<VideonestPreviewProps> = ({ videoId, config, st
   if (showDescription) params.push('show_description=true');
   
   // Add authentication parameters
+  // new version
   params.push(`channel_id=${config.channelId}`);
   params.push(`api_key=${config.apiKey}`);
 
