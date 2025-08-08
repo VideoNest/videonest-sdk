@@ -55,229 +55,107 @@ function forceLog(message, ...args) {
     }
 }
 
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
-// uploadOptimizationManager.ts - SDK v2 Upgrade
-function calculateOptimalChunkSize(fileSize) {
-    let baseChunkSize;
-    if (fileSize < 50 * 1024 * 1024)
-        baseChunkSize = 8 * 1024 * 1024; // < 50MB: 8MB
-    else if (fileSize < 500 * 1024 * 1024)
-        baseChunkSize = 25 * 1024 * 1024; // < 500MB: 25MB
-    else if (fileSize < 2 * 1024 * 1024 * 1024)
-        baseChunkSize = 50 * 1024 * 1024; // < 2GB: 50MB
-    else
-        baseChunkSize = 100 * 1024 * 1024; // 100MB
-    return Math.floor(baseChunkSize);
-}
-class ConnectionSpeedDetector {
-    constructor() {
-        this.samples = [];
-        this.avgSpeed = null;
-    }
-    recordChunkUpload(chunkSize, uploadTime) {
-        const speedMbps = (chunkSize * 8) / (uploadTime / 1000) / 1000000;
-        this.samples.push(speedMbps);
-        if (this.samples.length > 5)
-            this.samples.shift();
-        this.avgSpeed = this.calculateWeightedAverage(this.samples);
-        return this.avgSpeed;
-    }
-    calculateWeightedAverage(samples) {
-        if (samples.length === 0)
-            return 0;
-        let weightedSum = 0;
-        let totalWeight = 0;
-        samples.forEach((speed, index) => {
-            const weight = index + 1;
-            weightedSum += speed * weight;
-            totalWeight += weight;
-        });
-        return weightedSum / totalWeight;
-    }
-}
-class UploadOptimizationManager {
-    constructor(file, metadata, config) {
-        this.uploadQueue = [];
-        this.activeUploads = new Map();
-        this.completedChunks = new Set();
-        this.failedChunks = new Set();
-        this.speedDetector = new ConnectionSpeedDetector();
-        this.uploadId = '';
-        this.chunkBytesUploaded = new Map();
-        this.totalBytesUploaded = 0;
-        this.startTime = 0;
-        this.lastProgressReport = 0;
-        this.file = file;
-        this.metadata = metadata;
-        this.config = config;
-        this.chunkSize = calculateOptimalChunkSize(file.size);
-        this.totalChunks = Math.ceil(file.size / this.chunkSize);
-        console.log(`🚀 SDK Upload manager initialized: ${this.totalChunks} chunks, ${UploadOptimizationManager.CONCURRENCY} concurrency, ${(this.chunkSize / 1024 / 1024).toFixed(1)}MB chunk size`);
-    }
-    async upload(onProgress) {
-        const uploadId = generateUUID();
-        this.uploadId = uploadId;
-        this.startTime = Date.now();
-        onProgress(0, 'uploading');
-        for (let i = 0; i < this.totalChunks; i++)
-            this.chunkBytesUploaded.set(i, 0);
-        for (let i = 0; i < this.totalChunks; i++)
-            this.uploadQueue.push({ index: i, uploadId, retries: 0, maxRetries: 3 });
-        const workerPromises = [];
-        for (let i = 0; i < UploadOptimizationManager.CONCURRENCY; i++)
-            workerPromises.push(this.uploadWorker(onProgress));
-        await Promise.all(workerPromises);
-        if (this.failedChunks.size > 0) {
-            onProgress(0, 'failed');
-            throw new Error(`Failed to upload ${this.failedChunks.size} chunks after retries`);
-        }
-        console.log(`✅ SDK Upload completed in ${((Date.now() - this.startTime) / 1000).toFixed(1)}s`);
-        return { uploadId, totalChunks: this.totalChunks };
-    }
-    async uploadWorker(onProgress) {
-        while (this.uploadQueue.length > 0 || this.activeUploads.size > 0) {
-            if (this.uploadQueue.length > 0 && this.activeUploads.size < UploadOptimizationManager.CONCURRENCY) {
-                const chunkInfo = this.uploadQueue.shift();
-                if (chunkInfo) {
-                    try {
-                        await this.uploadChunk(chunkInfo, onProgress);
-                    }
-                    catch (error) {
-                        this.handleChunkError(chunkInfo, error);
-                    }
-                }
-            }
-            else {
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-        }
-    }
-    async uploadChunk(chunkInfo, onProgress) {
-        const { index, uploadId } = chunkInfo;
-        const start = index * this.chunkSize;
-        const end = Math.min(start + this.chunkSize, this.file.size);
-        const chunk = this.file.slice(start, end);
-        const chunkSize = chunk.size;
-        if (chunkSize === 0)
-            throw new Error(`Empty chunk detected for index ${index}`);
-        this.activeUploads.set(index, { ...chunkInfo, startTime: Date.now() });
-        const formData = new FormData();
-        formData.append('chunk', chunk);
-        formData.append('uploadId', uploadId);
-        formData.append('chunkIndex', index.toString());
-        formData.append('totalChunks', this.totalChunks.toString());
-        const startTime = Date.now();
-        const baseUrl = this.config.baseUrl || 'https://api1.videonest.co';
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.timeout = 1800000;
-            xhr.upload.onprogress = (event) => {
-                if (event.lengthComputable) {
-                    this.chunkBytesUploaded.set(index, event.loaded);
-                    this.totalBytesUploaded = Array.from(this.chunkBytesUploaded.values()).reduce((sum, bytes) => sum + bytes, 0);
-                    const now = Date.now();
-                    if (now - this.lastProgressReport > 100) {
-                        const progressPercentage = (this.totalBytesUploaded / this.file.size) * 100;
-                        onProgress(progressPercentage, 'uploading');
-                        this.lastProgressReport = now;
-                    }
-                }
-            };
-            xhr.open('POST', `${baseUrl}/sdk/${this.config.channelId}/upload-chunk-v2`);
-            xhr.setRequestHeader('Authorization', `Bearer ${this.config.apiKey}`);
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        const result = JSON.parse(xhr.responseText);
-                        if (!result.success) {
-                            reject(new Error(result.message || 'Chunk upload failed'));
-                        }
-                        else {
-                            const uploadTime = Date.now() - startTime;
-                            this.speedDetector.recordChunkUpload(chunkSize, uploadTime);
-                            this.activeUploads.delete(index);
-                            this.completedChunks.add(index);
-                            this.chunkBytesUploaded.set(index, chunkSize);
-                            resolve(result);
-                        }
-                    }
-                    catch (e) {
-                        reject(new Error('Invalid response from server'));
-                    }
-                }
-                else {
-                    reject(new Error(`HTTP error: ${xhr.status}`));
-                }
-            };
-            xhr.onerror = () => reject(new Error('Network error during upload'));
-            xhr.ontimeout = () => reject(new Error('Upload timeout - chunk may be too large'));
-            xhr.send(formData);
-        });
-    }
-    handleChunkError(chunkInfo, error) {
-        console.error(`Chunk ${chunkInfo.index} upload failed:`, error.message);
-        if (chunkInfo.retries < chunkInfo.maxRetries) {
-            chunkInfo.retries++;
-            setTimeout(() => {
-                this.uploadQueue.unshift(chunkInfo);
-            }, Math.pow(2, chunkInfo.retries) * 1000);
-        }
-        else {
-            this.failedChunks.add(chunkInfo.index);
-            this.activeUploads.delete(chunkInfo.index);
-        }
-    }
-    getUploadStats() {
-        return {
-            totalChunks: this.totalChunks,
-            completedChunks: this.completedChunks.size,
-            failedChunks: this.failedChunks.size,
-            activeUploads: this.activeUploads.size,
-            chunkSize: this.chunkSize,
-            totalSize: this.file.size,
-            averageSpeed: this.speedDetector.avgSpeed
-        };
-    }
-    getTotalChunks() {
-        return this.totalChunks;
-    }
-}
-UploadOptimizationManager.CONCURRENCY = 5;
-
 class VideonestClient {
     constructor(config) {
         this.config = config;
         log('VideonestClient initialized with channelId:', config.channelId);
     }
+    /**
+     * Upload video directly to S3 using presigned URLs
+     */
+    async uploadVideoDirectToS3(file, presignedUrls, uploadId, s3Key, chunkSize, onProgress) {
+        try {
+            const totalParts = presignedUrls.length;
+            const uploadedParts = [];
+            forceLog(`🚀 Starting S3 upload: ${file.name} (${totalParts} parts)`);
+            // Track progress for each chunk
+            const chunkProgress = new Array(totalParts).fill(0);
+            const updateOverallProgress = () => {
+                const totalProgress = chunkProgress.reduce((sum, progress) => sum + progress, 0);
+                const overallProgress = totalProgress / totalParts;
+                onProgress(overallProgress);
+            };
+            // Upload each chunk to S3
+            const chunkPromises = presignedUrls.map(async (presignedUrl, index) => {
+                const start = index * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunk = file.slice(start, end);
+                if (chunk.size === 0) {
+                    throw new Error(`Empty chunk detected for part ${index + 1}`);
+                }
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.timeout = 300000; // 5 minutes timeout
+                    xhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) {
+                            chunkProgress[index] = (event.loaded / event.total) * 100;
+                            updateOverallProgress();
+                        }
+                    };
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const etag = xhr.getResponseHeader('ETag');
+                            if (!etag) {
+                                reject(new Error(`No ETag received for part ${index + 1}`));
+                                return;
+                            }
+                            chunkProgress[index] = 100;
+                            updateOverallProgress();
+                            resolve({
+                                PartNumber: index + 1,
+                                ETag: etag.replace(/"/g, '') // Remove quotes from ETag
+                            });
+                        }
+                        else {
+                            reject(new Error(`HTTP ${xhr.status}: Failed to upload part ${index + 1}`));
+                        }
+                    };
+                    xhr.onerror = () => {
+                        reject(new Error(`Network error uploading part ${index + 1}`));
+                    };
+                    xhr.ontimeout = () => {
+                        reject(new Error(`Timeout uploading part ${index + 1}`));
+                    };
+                    xhr.open('PUT', presignedUrl);
+                    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                    xhr.send(chunk);
+                });
+            });
+            // Wait for all chunks to upload
+            const parts = await Promise.all(chunkPromises);
+            // Sort parts by part number to ensure correct order
+            const sortedParts = parts.sort((a, b) => a.PartNumber - b.PartNumber);
+            forceLog(`✅ S3 upload completed: ${file.name} (${sortedParts.length} parts)`);
+            return {
+                success: true,
+                uploadId: uploadId,
+                s3Key: s3Key,
+                parts: sortedParts
+            };
+        }
+        catch (error) {
+            forceLog(`❌ S3 upload failed for ${file.name}:`, error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Upload failed',
+                uploadId: uploadId,
+                s3Key: s3Key,
+                parts: []
+            };
+        }
+    }
+    /**
+     * Main video upload method
+     */
     async uploadVideo(file, options) {
-        var _a, _b;
-        forceLog('Starting optimized video upload process');
+        forceLog('Starting direct S3 video upload process');
         forceLog(`File: ${file.name}, size: ${file.size} bytes`);
-        // Generate a unique session ID for tracking
-        const sessionId = generateUUID();
-        const startTime = Date.now();
         try {
             const { metadata, onProgress = (_progress, _status) => { }, thumbnail } = options;
             // Check if thumbnail is provided
             if (!thumbnail) {
                 forceLog('Error: Thumbnail is required');
                 onProgress(0, 'failed');
-                // Track failed upload (missing thumbnail)
-                await this.trackVideoUpload('failed', {
-                    sessionId,
-                    startTime,
-                    status: 'failed',
-                    filename: file.name,
-                    fileSize: file.size,
-                    chunksCount: 0,
-                });
                 throw new Error('Thumbnail is required for video upload');
             }
             forceLog('Upload options:', {
@@ -287,150 +165,86 @@ class VideonestClient {
             // Make sure channelId is included in metadata
             const uploadMetadata = { ...metadata, channelId: this.config.channelId };
             forceLog('Upload metadata:', uploadMetadata);
-            // Create upload optimization manager
-            const uploadManager = new UploadOptimizationManager(file, uploadMetadata, this.config);
-            // Get actual number of chunks based on optimal chunk size calculation
-            const actualChunks = uploadManager.getTotalChunks();
-            // Start tracking upload session with actual chunk count
-            await this.trackVideoUpload('start', {
-                sessionId,
-                startTime,
-                userId: 'sdk-user', // Use generic user ID for SDK uploads
-                filename: file.name,
-                fileSize: file.size,
-                chunksCount: actualChunks, // Use actual calculated chunks, not default 2MB chunks
-                status: 'in_progress'
-            });
-            // Upload chunks with optimization
-            const { uploadId, totalChunks } = await uploadManager.upload(onProgress);
-            // Set status to finalizing once chunks are done
-            onProgress(100, 'finalizing');
-            forceLog(`All chunks uploaded. Finalizing upload... (uploadId: ${uploadId}, totalChunks: ${totalChunks})`);
-            const finalData = {
-                fileName: file.name,
-                uploadId: uploadId,
-                totalChunks: totalChunks.toString(),
-                title: uploadMetadata.title || 'Untitled Video',
-                description: uploadMetadata.description || '',
-                tags: uploadMetadata.tags ? (Array.isArray(uploadMetadata.tags) ? uploadMetadata.tags.join(',') : uploadMetadata.tags) : ''
-            };
-            forceLog('Finalize request data:', finalData);
-            // Use new SDK v2 finalize route
-            const finalizeResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/finalize-v2`, {
+            // Step 1: Generate presigned URLs using SDK endpoint
+            forceLog('📡 Generating presigned URLs via SDK endpoint...');
+            const presignedResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/generate-presigned-url`, {
                 method: 'POST',
-                body: JSON.stringify(finalData),
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.config.apiKey}`
                 },
-            });
-            forceLog(`Finalize response status: ${finalizeResponse.status}`);
-            const finalizeResult = await finalizeResponse.json();
-            forceLog('Finalize response data:', finalizeResult);
-            if (!finalizeResult.success) {
-                forceLog(`Finalization failed: ${finalizeResult.message}`);
-                onProgress(100, 'failed');
-                // Track failed upload (finalization failed)
-                await this.trackVideoUpload('failed', {
-                    sessionId,
-                    startTime,
-                    status: 'failed',
-                    filename: file.name,
+                body: JSON.stringify({
+                    fileName: file.name,
                     fileSize: file.size,
-                    chunksCount: totalChunks,
-                    videoId: ((_a = finalizeResult.video) === null || _a === void 0 ? void 0 : _a.id) || 0
-                });
-                throw new Error(finalizeResult.message || 'Upload finalization failed');
-            }
-            forceLog('Upload successfully finalized');
-            // Track successful upload completion before thumbnail upload
-            await this.trackVideoUpload('complete', {
-                sessionId,
-                startTime,
-                status: 'complete',
-                filename: file.name,
-                fileSize: file.size,
-                chunksCount: totalChunks,
-                videoId: finalizeResult.video.id
+                    contentType: file.type,
+                    metadata: uploadMetadata
+                })
             });
-            // Upload the provided thumbnail
-            forceLog('Uploading user-provided thumbnail');
-            await this.uploadThumbnail(thumbnail, finalizeResult.video.id);
-            forceLog('Upload process completed successfully');
-            return finalizeResult;
+            if (!presignedResponse.ok) {
+                throw new Error(`Failed to generate presigned URLs: ${presignedResponse.status}`);
+            }
+            const presignedData = await presignedResponse.json();
+            if (!presignedData.success) {
+                throw new Error(presignedData.error || 'Failed to generate presigned URLs');
+            }
+            forceLog('✅ Presigned URLs generated successfully');
+            // Step 2: Upload video directly to S3
+            forceLog('📤 Starting direct S3 upload...');
+            onProgress(0, 'uploading');
+            const uploadResult = await this.uploadVideoDirectToS3(file, presignedData.presignedUrls, presignedData.uploadId, presignedData.s3Key, presignedData.chunkSize, (progress) => {
+                forceLog(`Upload progress: ${progress.toFixed(1)}%`);
+                onProgress(progress, 'uploading');
+            });
+            if (!uploadResult.success) {
+                throw new Error(uploadResult.error || 'S3 upload failed');
+            }
+            forceLog('✅ S3 upload completed, starting finalization...');
+            onProgress(100, 'finalizing');
+            // Step 3: Complete upload using SDK endpoint
+            forceLog('🏁 Completing upload via SDK endpoint...');
+            const completeResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/complete-upload`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.config.apiKey}`
+                },
+                body: JSON.stringify({
+                    uploadId: uploadResult.uploadId,
+                    s3Key: uploadResult.s3Key,
+                    parts: uploadResult.parts
+                })
+            });
+            if (!completeResponse.ok) {
+                throw new Error(`Failed to complete upload: ${completeResponse.status}`);
+            }
+            const completeData = await completeResponse.json();
+            if (!completeData.success) {
+                throw new Error(completeData.message || 'Upload completion failed');
+            }
+            forceLog('🎉 Video record created successfully:', completeData.data.videoId);
+            // Step 4: Upload thumbnail using SDK endpoint
+            forceLog('🖼️ Uploading user-provided thumbnail...');
+            await this.uploadThumbnail(thumbnail, completeData.data.videoId);
+            forceLog('✅ Upload process completed successfully');
+            return {
+                success: true,
+                message: 'Video uploaded successfully',
+                video: {
+                    id: completeData.data.videoId,
+                }
+            };
         }
         catch (error) {
             forceLog(`Upload error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
-            (_b = options.onProgress) === null || _b === void 0 ? void 0 : _b.call(options, 0, 'failed');
-            await this.trackVideoUpload('failed', {
-                sessionId,
-                startTime,
-                status: 'failed',
-                filename: file.name,
-                fileSize: file.size
-            });
             return {
                 success: false,
                 message: error instanceof Error ? error.message : 'An unexpected error occurred during upload'
             };
         }
     }
-    // correct endpoint 
-    async trackVideoUpload(action, sessionData) {
-        log("Tracking video upload:", action, sessionData);
-        try {
-            let endpoint = '';
-            let method = 'POST';
-            let requestBody;
-            const baseUrl = 'https://api1.videonest.co';
-            if (action === 'start') {
-                // CREATE new session
-                endpoint = '/video-stats/upload-sessions';
-                method = 'POST';
-                requestBody = {
-                    session_id: sessionData.sessionId,
-                    user_id: sessionData.userId,
-                    video_id: sessionData.videoId || 0, // Will be updated later
-                    filename: sessionData.filename,
-                    file_size: sessionData.fileSize,
-                    chunks_count: sessionData.chunksCount || 0,
-                    status: 'in_progress'
-                };
-            }
-            else if (action === 'complete' || action === 'failed') {
-                // UPDATE existing session
-                endpoint = `/video-stats/upload-sessions/${sessionData.sessionId}`;
-                method = 'POST'; // API uses POST for updates
-                requestBody = {
-                    video_id: sessionData.videoId,
-                    end_time: new Date().toISOString(),
-                    status: sessionData.status
-                };
-                if (sessionData.startTime) {
-                    const duration = Date.now() - sessionData.startTime;
-                    requestBody.total_duration = `${Math.floor(duration / 1000)} seconds`;
-                    if (sessionData.fileSize && duration > 0) {
-                        const speedBps = (sessionData.fileSize * 8) / (duration / 1000); // bits per second
-                        requestBody.avg_speed_mbps = parseFloat((speedBps / 1000000).toFixed(2)); // Convert to Mbps
-                    }
-                }
-            }
-            const url = `${baseUrl}${endpoint}`;
-            const headers = { 'Content-Type': 'application/json' };
-            const response = await fetch(url, { method, headers, body: JSON.stringify(requestBody) });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                log('Failed to track upload session:', errorData);
-                return { success: false, error: 'Failed to track upload session' };
-            }
-            const data = await response.json();
-            return { success: true, ...data };
-        }
-        catch (error) {
-            log('Error tracking upload session:', error instanceof Error ? error.message : String(error));
-            return { success: false, error: error instanceof Error ? error.message : 'Failed to track upload session' };
-        }
-    }
+    /**
+     * Upload thumbnail to the video
+     */
     async uploadThumbnail(thumbnailFile, videoId) {
         const formData = new FormData();
         formData.append('thumbnail', thumbnailFile);
@@ -452,6 +266,9 @@ class VideonestClient {
             throw new Error(error instanceof Error ? error.message : 'Failed to upload thumbnail');
         }
     }
+    /**
+     * Get video status
+     */
     async getVideoStatus(videoId) {
         try {
             const response = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/videos/${videoId}/status`, {
@@ -470,6 +287,9 @@ class VideonestClient {
             throw new Error(error instanceof Error ? error.message : 'Failed to get video status');
         }
     }
+    /**
+     * List all videos in the channel
+     */
     async listVideos() {
         try {
             const response = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/videos`, {
