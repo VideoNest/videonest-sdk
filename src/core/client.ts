@@ -179,6 +179,8 @@ export default class VideonestClient {
 
       // Step 2: Upload video directly to S3
       forceLog('📤 Starting direct S3 upload...');
+    
+      
       onProgress(0, 'uploading');
 
       const uploadResult = await this.uploadVideoDirectToS3(
@@ -192,6 +194,15 @@ export default class VideonestClient {
           onProgress(progress, 'uploading');
         }
       );
+      forceLog('🔍 Complete upload request details:', {
+        endpoint: `https://api1.videonest.co/sdk/${this.config.channelId}/complete-upload`,
+        uploadId: uploadResult.uploadId,
+        s3Key: uploadResult.s3Key,
+        parts: uploadResult.parts,
+        partsCount: uploadResult.parts?.length,
+        firstPart: uploadResult.parts?.[0],
+        authorization: `Bearer ${this.config.apiKey.substring(0, 10)}...`
+      });
 
       if (!uploadResult.success) {
         throw new Error(uploadResult.error || 'S3 upload failed');

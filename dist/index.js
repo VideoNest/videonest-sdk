@@ -185,9 +185,10 @@ class VideonestClient {
                 onProgress(0, 'failed');
                 throw new Error('Thumbnail is required for video upload');
             }
-            forceLog('Upload options:', {
-                metadata,
-                hasThumbnail: !!thumbnail
+            forceLog('all upload arguments:', {
+                file,
+                options,
+                thumbnail
             });
             // Make sure channelId is included in metadata
             const uploadMetadata = { ...metadata, channelId: this.config.channelId };
