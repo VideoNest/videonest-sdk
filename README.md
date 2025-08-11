@@ -43,29 +43,18 @@ This repository demonstrates how to properly integrate and use all features of t
 
 ## Authentication
 
-The VideoNest SDK uses header-based authentication where your credentials (channel ID and API key) are automatically attached as request headers for all API calls. This simplifies the API by eliminating the need for separate authentication steps.
+The VideoNest SDK uses header-based authentication where your credentials (channel ID and API key) are automatically attached as request headers for all API calls.
 
 ```javascript
-import { uploadVideo, getVideoStatus, listVideos, initializeVideonest } from 'videonest-sdk';
+import { uploadVideo, getVideoStatus, listVideos } from 'videonest-sdk';
 
-// Option 1: Initialize the SDK once with default credentials (recommended)
-initializeVideonest({
-  channelId: 12345, // Number type
-  apiKey: 'your-api-key'
-});
-
-// Then make API calls without passing credentials each time
-uploadVideo(fileObject, options);
-getVideoStatus(videoId);
-listVideos();
-
-// Option 2: Or provide credentials with each API call
+// Provide credentials with each API call
 const config = {
   channelId: 12345, // Number type
   apiKey: 'your-api-key'
 };
 
-// Pass credentials directly to each API call
+// Pass credentials to each API call
 uploadVideo(fileObject, options, config);
 getVideoStatus(videoId, config);
 listVideos(config);
@@ -73,8 +62,8 @@ listVideos(config);
 
 **Authentication Headers:**
 Behind the scenes, the SDK automatically adds the following headers to all API requests:
-- `X-API-Key`: Your VideoNest API key
-- `X-Channel-ID`: Your VideoNest channel ID
+- `Authorization`: Bearer token with your API key
+- Channel ID is included in the API endpoint URLs
 
 ## Debug Mode
 
@@ -127,30 +116,19 @@ UploadResult {
 }
 ```
 
-**Advanced Upload Features:**
+**Upload Features:**
 
-The VideoNest SDK includes intelligent chunked uploading with network-based optimizations:
+The VideoNest SDK provides reliable chunked uploading with the following features:
 
-- **Adaptive Chunk Sizing**: Automatically adjusts chunk sizes based on file size and network conditions
-  - Small files (<50MB): 5MB chunks
-  - Medium files (<500MB): 15MB chunks
-  - Large files (<2GB): 35MB chunks
-  - Very large files (>2GB): 75MB chunks
+- **Chunked Upload**: Files are automatically split into manageable chunks for reliable transfer
+- **Progress Tracking**: Real-time progress reporting via the onProgress callback
+- **Error Handling**: Automatic error detection and reporting
+- **Direct S3 Upload**: Files are uploaded directly to S3 using presigned URLs for optimal performance
 
-- **Network Speed Detection**: Further optimizes chunk sizes based on detected upload speeds:
-  - Fast connections (>50 Mbps): Up to 150MB chunks
-  - Good connections (>15 Mbps): Up to 100MB chunks
-  - Decent connections (>8 Mbps): Up to 50MB chunks
-  - Slow connections (<3 Mbps): As small as 1MB chunks
-
-- **Parallel Upload**: Dynamically adjusts the number of concurrent uploads based on network performance
-
-- **Automatic Retry**: Failed chunks are automatically retried with exponential backoff
-
-- **Status-Based Progress Tracking**: Detailed progress reporting via the onProgress callback that provides both percentage and status:
+**Progress Callback:**
 
 ```typescript
-onProgress?: (progress: number, status: 'uploading' | 'finalizing' | 'failed') => void;
+onProgress?: (progress: number, status: 'uploading' | 'finalizing' | 'failed' | 'stalled') => void;
 ```
 
   The callback provides:
@@ -159,6 +137,7 @@ onProgress?: (progress: number, status: 'uploading' | 'finalizing' | 'failed') =
     - `'uploading'`: Actively uploading chunks (progress from 0% to 99%)
     - `'finalizing'`: Chunks uploaded, server processing (progress=100%)
     - `'failed'`: Upload encountered an error (progress=0)
+    - `'stalled'`: Upload has stalled and may need to be retried
 
   Example usage:
   ```javascript
@@ -266,7 +245,9 @@ async function listVideos(config: VideonestConfig): Promise<{success: boolean, v
 
 ## Video Embedding
 
-The SDK includes a React component for embedding videos:
+The SDK includes React components for embedding videos:
+
+### VideonestEmbed - Full Video Player
 
 ```jsx
 import { VideonestEmbed } from 'videonest-sdk';
@@ -296,7 +277,37 @@ function MyComponent() {
 }
 ```
 
-**Props:**
+### VideonestPreview - Preview Player
+
+```jsx
+import { VideonestPreview } from 'videonest-sdk';
+
+function MyComponent() {
+  // Your VideoNest credentials (required)
+  const config = {
+    channelId: 12345,
+    apiKey: 'your-api-key'
+  };
+
+  return (
+    <VideonestPreview
+      videoId={123456}
+      config={config}
+      style={{
+        width: '100%',
+        height: '400px',
+        primaryColor: '#ff5500',
+        secondaryColor: '#00aaff',
+        darkMode: true,
+        showTitle: true,
+        showDescription: true
+      }}
+    />
+  );
+}
+```
+
+**Props (Both Components):**
 - `videoId` (number): The ID of the video to embed (required)
 - `config` (VideonestConfig): Your VideoNest credentials (required)
   - `channelId` (number): Your VideoNest channel ID
@@ -309,6 +320,10 @@ function MyComponent() {
   - `darkMode` (boolean): Enable dark theme for the player
   - `showTitle` (boolean): Show video title
   - `showDescription` (boolean): Show video description
+
+**Component Differences:**
+- `VideonestEmbed`: Full video player with complete playback controls
+- `VideonestPreview`: Preview player, typically used for video previews or thumbnails
 
 ### Styling Recommendations
 
@@ -330,16 +345,52 @@ For optimal user experience with descriptions:
 
 The SDK exports the following TypeScript interfaces:
 
-- `VideonestConfig`: Configuration containing channel ID and API key
-- `VideoMetadata`: Metadata for video uploads
-- `UploadOptions`: Options for video uploads
-- `UploadResult`: Result of a video upload
-- `VideoStatus`: Status of a video
+```typescript
+// Configuration for VideoNest credentials
+interface VideonestConfig {
+  channelId: number;
+  apiKey: string;
+  baseUrl?: string;
+}
+
+// Metadata for video uploads
+interface VideoMetadata {
+  title: string;
+  channelId: number;
+  description?: string;
+  tags?: string[] | string;
+}
+
+// Options for video uploads
+interface UploadOptions {
+  chunkSize?: number;
+  onProgress?: (progress: number, status: 'uploading' | 'finalizing' | 'failed' | 'stalled') => void;
+  metadata: VideoMetadata;
+  thumbnail: File; // Required
+}
+
+// Result of a video upload
+interface UploadResult {
+  success: boolean;
+  message?: string;
+  video?: {
+    id: string;
+  };
+}
+
+// Status of a video
+interface VideoStatus {
+  success: boolean;
+  message: string;
+  status: string;
+  videoId: number;
+}
+```
 
 For detailed type definitions, you can import them directly:
 
 ```typescript
-import { VideoMetadata, UploadOptions } from 'videonest-sdk';
+import { VideoMetadata, UploadOptions, VideonestConfig } from 'videonest-sdk';
 ```
 
 ## Webhooks

@@ -216,9 +216,7 @@ class VideonestClient {
             if (!presignedData.success) {
                 throw new Error(presignedData.error || 'Failed to generate presigned URLs');
             }
-            forceLog('✅ Presigned URLs generated successfully');
-            // Step 2: Upload video directly to S3
-            forceLog('📤 Starting direct S3 upload...');
+            forceLog('✅ presigned result was:', presignedData);
             onProgress(0, 'uploading');
             const uploadResult = await this.uploadVideoDirectToS3(file, presignedData.presignedUrls, presignedData.uploadId, presignedData.s3Key, presignedData.chunkSize, (progress) => {
                 forceLog(`Upload progress: ${progress.toFixed(1)}%`);
