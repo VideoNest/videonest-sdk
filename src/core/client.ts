@@ -139,9 +139,10 @@ export default class VideonestClient {
         throw new Error('Thumbnail is required for video upload');
       }
 
-      forceLog('Upload options:', {
-        metadata,
-        hasThumbnail: !!thumbnail
+      forceLog('all upload arguments:', {
+        file,
+        options,
+        thumbnail
       });
 
       // Make sure channelId is included in metadata
