@@ -148,6 +148,7 @@ class VideonestClient {
      * Main video upload method
      */
     async uploadVideo(file, options) {
+        var _a, _b;
         forceLog('Starting direct S3 video upload process');
         forceLog(`File: ${file.name}, size: ${file.size} bytes`);
         try {
@@ -195,6 +196,15 @@ class VideonestClient {
             const uploadResult = await this.uploadVideoDirectToS3(file, presignedData.presignedUrls, presignedData.uploadId, presignedData.s3Key, presignedData.chunkSize, (progress) => {
                 forceLog(`Upload progress: ${progress.toFixed(1)}%`);
                 onProgress(progress, 'uploading');
+            });
+            forceLog('🔍 Complete upload request details:', {
+                endpoint: `https://api1.videonest.co/sdk/${this.config.channelId}/complete-upload`,
+                uploadId: uploadResult.uploadId,
+                s3Key: uploadResult.s3Key,
+                parts: uploadResult.parts,
+                partsCount: (_a = uploadResult.parts) === null || _a === void 0 ? void 0 : _a.length,
+                firstPart: (_b = uploadResult.parts) === null || _b === void 0 ? void 0 : _b[0],
+                authorization: `Bearer ${this.config.apiKey.substring(0, 10)}...`
             });
             if (!uploadResult.success) {
                 throw new Error(uploadResult.error || 'S3 upload failed');
