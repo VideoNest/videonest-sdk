@@ -173,7 +173,12 @@ class VideonestClient {
                 const chunkPromise = uploadChunk(i)
                     .then(result => {
                     completedParts.push(result);
+                    log(`📊 Progress: ${completedParts.length}/${totalParts} chunks completed (${Math.round((completedParts.length / totalParts) * 100)}%)`);
                     return result;
+                })
+                    .catch(error => {
+                    log(`💥 Chunk ${i + 1}/${totalParts} permanently failed: ${error.message}`);
+                    throw error;
                 })
                     .finally(() => activeChunks.delete(chunkPromise));
                 activeChunks.add(chunkPromise);

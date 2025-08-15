@@ -2,7 +2,7 @@
 import debugModule from 'debug';
 
 // Debug mode configuration (disabled by default)
-let isDebugEnabled: boolean = false;
+let isDebugEnabled: boolean = true;
 
 // Initialize debug module but don't enable by default
 const debugInstance = debugModule('videonest-sdk');
