@@ -30,7 +30,7 @@ var React__namespace = /*#__PURE__*/_interopNamespace(React);
 
 // src/utils/debug.ts
 // Debug mode configuration (disabled by default)
-let isDebugEnabled = false;
+let isDebugEnabled = true;
 // Initialize debug module but don't enable by default
 const debugInstance = debugModule__default["default"]('videonest-sdk');
 /**

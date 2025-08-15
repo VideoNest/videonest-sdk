@@ -3,7 +3,7 @@ import * as React from 'react';
 
 // src/utils/debug.ts
 // Debug mode configuration (disabled by default)
-let isDebugEnabled = false;
+let isDebugEnabled = true;
 // Initialize debug module but don't enable by default
 const debugInstance = debugModule('videonest-sdk');
 /**
