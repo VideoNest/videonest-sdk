@@ -5,7 +5,7 @@ export default class VideonestClient {
     /**
      * Upload video directly to S3 using presigned URLs
      */
-    private uploadVideoDirectToS3;
+    private uploadToS3;
     /**
      * Main video upload method
      */
