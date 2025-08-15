@@ -67,7 +67,6 @@ class VideonestClient {
         try {
             const totalParts = presignedUrls.length;
             const uploadedParts = [];
-            forceLog(`🚀 Starting S3 upload: ${file.name} (${totalParts} parts)`);
             // Track progress for each chunk
             const chunkProgress = new Array(totalParts).fill(0);
             const updateOverallProgress = () => {
@@ -125,7 +124,6 @@ class VideonestClient {
             const parts = await Promise.all(chunkPromises);
             // Sort parts by part number to ensure correct order
             const sortedParts = parts.sort((a, b) => a.PartNumber - b.PartNumber);
-            forceLog(`✅ S3 upload completed: ${file.name} (${sortedParts.length} parts)`);
             return {
                 success: true,
                 uploadId: uploadId,
@@ -134,7 +132,6 @@ class VideonestClient {
             };
         }
         catch (error) {
-            forceLog(`❌ S3 upload failed for ${file.name}:`, error);
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Upload failed',
@@ -148,27 +145,17 @@ class VideonestClient {
      * Main video upload method
      */
     async uploadVideo(file, options) {
-        var _a, _b;
-        forceLog('Starting direct S3 video upload process');
-        forceLog(`File: ${file.name}, size: ${file.size} bytes`);
+        forceLog(`📤 Starting upload: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
         try {
             const { metadata, onProgress = (_progress, _status) => { }, thumbnail } = options;
             // Check if thumbnail is provided
             if (!thumbnail) {
-                forceLog('Error: Thumbnail is required');
                 onProgress(0, 'failed');
                 throw new Error('Thumbnail is required for video upload');
             }
-            forceLog('all upload arguments:', {
-                file,
-                options,
-                thumbnail
-            });
             // Make sure channelId is included in metadata
             const uploadMetadata = { ...metadata, channelId: this.config.channelId };
-            forceLog('Upload metadata:', uploadMetadata);
             // Step 1: Generate presigned URLs using SDK endpoint
-            forceLog('📡 Generating presigned URLs via SDK endpoint...');
             const presignedResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/generate-presigned-url`, {
                 method: 'POST',
                 headers: {
@@ -189,28 +176,15 @@ class VideonestClient {
             if (!presignedData.success) {
                 throw new Error(presignedData.error || 'Failed to generate presigned URLs');
             }
-            forceLog('✅ presigned result was:', presignedData);
             onProgress(0, 'uploading');
             const uploadResult = await this.uploadVideoDirectToS3(file, presignedData.presignedUrls, presignedData.uploadId, presignedData.s3Key, presignedData.chunkSize, (progress) => {
-                forceLog(`Upload progress: ${progress.toFixed(1)}%`);
                 onProgress(progress, 'uploading');
-            });
-            forceLog('🔍 Complete upload request details:', {
-                endpoint: `https://api1.videonest.co/sdk/${this.config.channelId}/complete-upload`,
-                uploadId: uploadResult.uploadId,
-                s3Key: uploadResult.s3Key,
-                parts: uploadResult.parts,
-                partsCount: (_a = uploadResult.parts) === null || _a === void 0 ? void 0 : _a.length,
-                firstPart: (_b = uploadResult.parts) === null || _b === void 0 ? void 0 : _b[0],
-                authorization: `Bearer ${this.config.apiKey.substring(0, 10)}...`
             });
             if (!uploadResult.success) {
                 throw new Error(uploadResult.error || 'S3 upload failed');
             }
-            forceLog('✅ S3 upload completed, starting finalization...');
             onProgress(100, 'finalizing');
             // Step 3: Complete upload using SDK endpoint
-            forceLog('🏁 Completing upload via SDK endpoint...');
             const completeResponse = await fetch(`https://api1.videonest.co/sdk/${this.config.channelId}/complete-upload`, {
                 method: 'POST',
                 headers: {
@@ -230,11 +204,9 @@ class VideonestClient {
             if (!completeData.success) {
                 throw new Error(completeData.message || 'Upload completion failed');
             }
-            forceLog('🎉 Video record created successfully:', completeData.data.videoId);
             // Step 4: Upload thumbnail using SDK endpoint
-            forceLog('🖼️ Uploading user-provided thumbnail...');
             await this.uploadThumbnail(thumbnail, completeData.data.videoId);
-            forceLog('✅ Upload process completed successfully');
+            forceLog('✅ Upload completed successfully:', completeData.data.videoId);
             return {
                 success: true,
                 message: 'Video uploaded successfully',
@@ -244,7 +216,7 @@ class VideonestClient {
             };
         }
         catch (error) {
-            forceLog(`Upload error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
+            forceLog(`❌ Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             return {
                 success: false,
                 message: error instanceof Error ? error.message : 'An unexpected error occurred during upload'
@@ -307,21 +279,16 @@ class VideonestClient {
                     'Authorization': `Bearer ${this.config.apiKey}`
                 },
             });
-            log(`Videos list response status: ${response.status}`);
             const result = await response.json();
-            log('Videos list response data:', result);
             if (!result.success) {
-                log(`Videos list fetch failed: ${result.message || 'Unknown error'}`);
                 return {
                     success: false,
                     message: result.message || 'Failed to retrieve videos'
                 };
             }
-            log(`Successfully retrieved ${result.videos ? result.videos.length : 0} videos`);
             return result;
         }
         catch (error) {
-            log(`Videos list error: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
             return {
                 success: false,
                 message: error instanceof Error ? error.message : 'Failed to retrieve videos'

@@ -13,7 +13,7 @@ export default class VideonestClient {
   /**
    * Upload video directly to S3 using presigned URLs
    */
-  private async uploadVideoDirectToS3(
+  private async uploadToS3(
     file: File,
     presignedUrls: string[],
     uploadId: string,
@@ -25,6 +25,8 @@ export default class VideonestClient {
       const totalParts = presignedUrls.length;
       const uploadedParts: any[] = [];
 
+      log(`🚀 Starting S3 upload: ${file.name} (${totalParts} parts)`);
+
       // Track progress for each chunk
       const chunkProgress = new Array(totalParts).fill(0);
 
@@ -34,11 +36,21 @@ export default class VideonestClient {
         onProgress(overallProgress);
       };
 
-      // Upload each chunk to S3
-      const chunkPromises = presignedUrls.map(async (presignedUrl, index) => {
+      // Upload chunks with controlled concurrency (max 6 chunks at a time)
+      const CONCURRENT_CHUNKS = 6;
+      const MAX_RETRIES = 3;
+      const activeChunks = new Set();
+      const completedParts: any[] = [];
+
+      const uploadChunk = async (index: number, retryCount = 0): Promise<{ PartNumber: number; ETag: string }> => {
+        const presignedUrl = presignedUrls[index];
         const start = index * chunkSize;
         const end = Math.min(start + chunkSize, file.size);
         const chunk = file.slice(start, end);
+
+        // Reset progress for this chunk (fixes retry progress calculation)
+        chunkProgress[index] = 0;
+        updateOverallProgress();
 
         if (chunk.size === 0) {
           throw new Error(`Empty chunk detected for part ${index + 1}`);
@@ -46,7 +58,7 @@ export default class VideonestClient {
 
         return new Promise<{ PartNumber: number; ETag: string }>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.timeout = 300000; // 5 minutes timeout
+          xhr.timeout = 60000; // 1 minute timeout (reduced from 5 minutes)
 
           xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
@@ -65,35 +77,60 @@ export default class VideonestClient {
 
               chunkProgress[index] = 100;
               updateOverallProgress();
+              log(`✅ Chunk ${index + 1}/${totalParts} completed`);
 
               resolve({
                 PartNumber: index + 1,
-                ETag: etag.replace(/"/g, '') // Remove quotes from ETag
+                ETag: etag.replace(/"/g, '')
               });
             } else {
               reject(new Error(`HTTP ${xhr.status}: Failed to upload part ${index + 1}`));
             }
           };
 
-          xhr.onerror = () => {
-            reject(new Error(`Network error uploading part ${index + 1}`));
-          };
-
-          xhr.ontimeout = () => {
-            reject(new Error(`Timeout uploading part ${index + 1}`));
-          };
+          xhr.onerror = () => reject(new Error(`Network error uploading part ${index + 1}`));
+          xhr.ontimeout = () => reject(new Error(`Timeout uploading part ${index + 1}`));
 
           xhr.open('PUT', presignedUrl);
           xhr.setRequestHeader('Content-Type', 'application/octet-stream');
           xhr.send(chunk);
+        }).catch(async (error) => {
+          // Retry logic
+          if (retryCount < MAX_RETRIES) {
+            log(`⚠️ Chunk ${index + 1} failed, retrying (${retryCount + 1}/${MAX_RETRIES}): ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000)); // Exponential backoff
+            return uploadChunk(index, retryCount + 1);
+          } else {
+            log(`❌ Chunk ${index + 1} failed after ${MAX_RETRIES} retries: ${error.message}`);
+            throw error;
+          }
         });
-      });
+      };
 
-      // Wait for all chunks to upload
-      const parts = await Promise.all(chunkPromises);
+      // Process chunks with controlled concurrency
+      for (let i = 0; i < presignedUrls.length; i++) {
+        // Wait if we've hit the concurrency limit
+        if (activeChunks.size >= CONCURRENT_CHUNKS) {
+          await Promise.race(activeChunks);
+        }
+
+        const chunkPromise = uploadChunk(i)
+          .then(result => {
+            completedParts.push(result);
+            return result;
+          })
+          .finally(() => activeChunks.delete(chunkPromise));
+
+        activeChunks.add(chunkPromise);
+      }
+
+      // Wait for remaining chunks to complete
+      await Promise.all(activeChunks);
 
       // Sort parts by part number to ensure correct order
-      const sortedParts = parts.sort((a, b) => a.PartNumber - b.PartNumber);
+      const sortedParts = completedParts.sort((a, b) => a.PartNumber - b.PartNumber);
+
+      log(`✅ S3 upload completed: ${file.name} (${sortedParts.length} parts)`);
 
       return {
         success: true,
@@ -103,12 +140,14 @@ export default class VideonestClient {
       };
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload to S3';
+      log(`❌ S3 upload failed: ${errorMessage}`);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Upload failed',
         uploadId: uploadId,
         s3Key: s3Key,
-        parts: []
+        parts: [],
+        error: errorMessage
       };
     }
   }
@@ -162,7 +201,7 @@ export default class VideonestClient {
 
       onProgress(0, 'uploading');
 
-      const uploadResult = await this.uploadVideoDirectToS3(
+      const uploadResult = await this.uploadToS3(
         file,
         presignedData.presignedUrls,
         presignedData.uploadId,
