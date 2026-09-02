@@ -120,7 +120,7 @@ class VideonestClient {
                 }
                 return new Promise((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
-                    xhr.timeout = 60000; // 1 minute timeout (reduced from 5 minutes)
+                    xhr.timeout = 300000; // 5 minutes timeout
                     xhr.upload.onprogress = (event) => {
                         if (event.lengthComputable) {
                             chunkProgress[index] = (event.loaded / event.total) * 100;
